@@ -1,4 +1,4 @@
-# Tastq — Agent Instructions
+# Tastgo — Agent Instructions
 
 ## Stack
 - Next.js 16 App Router
@@ -16,10 +16,9 @@ Before writing any code, check if a relevant skill exists in `.agents/skills/` a
 ## Project structure
 
 ```
-tastq/
+tastgo/
 ├── app/
 │   ├── layout.tsx
-│   ├── providers.tsx
 │   ├── not-found.tsx
 │   ├── error.tsx
 │   ├── (marketing)/          # reserved, empty for now
@@ -42,6 +41,7 @@ tastq/
 │           └── _lib/
 ├── components/
 │   ├── ui/                   # shadcn components — do not edit manually
+│   └── shared/               # shared custom components only when needed
 │   └── layout/               # navbar, sidebar, footer
 ├── lib/
 │   ├── supabase/
@@ -169,3 +169,4 @@ Every component is a Server Component unless it has `'use client'` at the top. N
 - Keep components small and focused — if a component is doing too much, split it
 - Never put secrets or server-only logic in Client Components
 - `providers.tsx` in `app/` is a `'use client'` component that composes all global providers — imported once by `app/layout.tsx`
+- We are not building (marketing) route for now. 
