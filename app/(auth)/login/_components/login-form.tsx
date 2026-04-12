@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { login } from '../_lib/actions'
+import { login } from '@/app/(auth)/login/_lib/actions'
 
 export function LoginForm({ className, ...props }: ComponentProps<'div'>) {
   const [email, setEmail] = useState('')
