@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useEffect } from 'react'
+import { useState, useTransition, useEffect, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useKitchen } from '@/hooks/use-kitchen'
 import { createClient } from '@/lib/supabase/client'
@@ -21,13 +21,13 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from '@/components/ui/combobox'
 import {
   Field,
   FieldDescription,
@@ -58,6 +58,29 @@ export function CreateBatchDialog({ servicePeriods }: CreateBatchDialogProps) {
   const [pending, startTransition] = useTransition()
 
   const activeServicePeriods = servicePeriods.filter((sp) => sp.is_active)
+
+  const recipeItems = useMemo(() => recipes.map((r) => r.id), [recipes])
+
+  const recipeNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const r of recipes) {
+      map.set(r.id, r.name)
+    }
+    return map
+  }, [recipes])
+
+  const servicePeriodItems = useMemo(
+    () => ['__none__', ...activeServicePeriods.map((sp) => sp.id)],
+    [activeServicePeriods]
+  )
+
+  const servicePeriodLabelById = useMemo(() => {
+    const map = new Map<string, string>([['__none__', 'None']])
+    for (const sp of activeServicePeriods) {
+      map.set(sp.id, sp.name)
+    }
+    return map
+  }, [activeServicePeriods])
 
   useEffect(() => {
     if (!open) return
@@ -143,24 +166,34 @@ export function CreateBatchDialog({ servicePeriods }: CreateBatchDialogProps) {
         <form onSubmit={handleSubmit}>
           <FieldGroup>
             <Field>
-              <FieldLabel>Recipe</FieldLabel>
-              <Select
-                value={selectedRecipeId}
-                onValueChange={setSelectedRecipeId}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select a recipe" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    {recipes.map((r) => (
-                      <SelectItem key={r.id} value={r.id}>
-                        {r.name}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
+              <FieldLabel htmlFor="batch-recipe">Recipe</FieldLabel>
+              <div className="relative z-100">
+                <Combobox
+                  items={recipeItems}
+                  value={selectedRecipeId || null}
+                  onValueChange={(next) => {
+                    setSelectedRecipeId(next ?? '')
+                  }}
+                  modal={true}
+                  itemToStringLabel={(id) => recipeNameById.get(String(id)) ?? ''}
+                >
+                  <ComboboxInput
+                    id="batch-recipe"
+                    placeholder="Select a recipe"
+                    className="w-full"
+                  />
+                  <ComboboxContent className="z-100 pointer-events-auto">
+                    <ComboboxEmpty>No recipes found.</ComboboxEmpty>
+                    <ComboboxList>
+                      {(item: string) => (
+                        <ComboboxItem key={item} value={item}>
+                          {recipeNameById.get(item) ?? item}
+                        </ComboboxItem>
+                      )}
+                    </ComboboxList>
+                  </ComboboxContent>
+                </Combobox>
+              </div>
             </Field>
 
             <Field>
@@ -182,25 +215,36 @@ export function CreateBatchDialog({ servicePeriods }: CreateBatchDialogProps) {
             </Field>
 
             <Field>
-              <FieldLabel>Service Period</FieldLabel>
-              <Select
-                value={servicePeriodId}
-                onValueChange={setServicePeriodId}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select service period" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="__none__">None</SelectItem>
-                    {activeServicePeriods.map((sp) => (
-                      <SelectItem key={sp.id} value={sp.id}>
-                        {sp.name}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
+              <FieldLabel htmlFor="batch-service-period">Service Period</FieldLabel>
+              <div className="relative z-100">
+                <Combobox
+                  items={servicePeriodItems}
+                  value={servicePeriodId}
+                  onValueChange={(next) => {
+                    setServicePeriodId(next ?? '__none__')
+                  }}
+                  modal={true}
+                  itemToStringLabel={(id) =>
+                    servicePeriodLabelById.get(String(id)) ?? ''
+                  }
+                >
+                  <ComboboxInput
+                    id="batch-service-period"
+                    placeholder="Select service period"
+                    className="w-full"
+                  />
+                  <ComboboxContent className="z-100 pointer-events-auto">
+                    <ComboboxEmpty>No service periods found.</ComboboxEmpty>
+                    <ComboboxList>
+                      {(item: string) => (
+                        <ComboboxItem key={item} value={item}>
+                          {servicePeriodLabelById.get(item) ?? item}
+                        </ComboboxItem>
+                      )}
+                    </ComboboxList>
+                  </ComboboxContent>
+                </Combobox>
+              </div>
             </Field>
           </FieldGroup>
 

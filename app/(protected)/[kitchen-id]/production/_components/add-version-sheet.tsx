@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useEffect } from 'react'
+import { useState, useTransition, useEffect, useMemo } from 'react'
 import { PlusIcon, TrashIcon } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useKitchen } from '@/hooks/use-kitchen'
@@ -20,6 +20,14 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from '@/components/ui/combobox'
 import {
   Select,
   SelectContent,
@@ -78,6 +86,19 @@ export function AddVersionSheet({
       .order('name')
       .then(({ data }) => setInventoryItems((data ?? []) as InventoryItem[]))
   }, [open, kitchen.id])
+
+  const inventoryItemIds = useMemo(
+    () => inventoryItems.map((item) => item.id),
+    [inventoryItems]
+  )
+
+  const inventoryItemNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const item of inventoryItems) {
+      map.set(item.id, item.name)
+    }
+    return map
+  }, [inventoryItems])
 
   function handleOpenChange(next: boolean) {
     if (pending) return
@@ -220,25 +241,39 @@ export function AddVersionSheet({
                   components.map((comp, i) => (
                     <tr key={i} className="border-b">
                       <td className="py-1.5 pl-4 pr-2">
-                        <Select
-                          value={comp.inventory_item_id}
-                          onValueChange={(v) =>
-                            updateIngredient(i, 'inventory_item_id', v)
-                          }
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Select ingredient" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectGroup>
-                              {inventoryItems.map((item) => (
-                                <SelectItem key={item.id} value={item.id}>
-                                  {item.name}
-                                </SelectItem>
-                              ))}
-                            </SelectGroup>
-                          </SelectContent>
-                        </Select>
+                        <div className="relative z-100">
+                          <Combobox
+                            items={inventoryItemIds}
+                            value={comp.inventory_item_id || null}
+                            onValueChange={(next) =>
+                              updateIngredient(
+                                i,
+                                'inventory_item_id',
+                                next ?? ''
+                              )
+                            }
+                            modal={true}
+                            itemToStringLabel={(id) =>
+                              inventoryItemNameById.get(String(id)) ?? ''
+                            }
+                          >
+                            <ComboboxInput
+                              id={`add-version-ingredient-${i}`}
+                              placeholder="Select ingredient"
+                              className="w-full"
+                            />
+                            <ComboboxContent className="z-100 pointer-events-auto">
+                              <ComboboxEmpty>No ingredients found.</ComboboxEmpty>
+                              <ComboboxList>
+                                {(item: string) => (
+                                  <ComboboxItem key={item} value={item}>
+                                    {inventoryItemNameById.get(item) ?? item}
+                                  </ComboboxItem>
+                                )}
+                              </ComboboxList>
+                            </ComboboxContent>
+                          </Combobox>
+                        </div>
                       </td>
                       <td className="px-2 py-1.5">
                         <Input
