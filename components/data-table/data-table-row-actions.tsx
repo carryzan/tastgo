@@ -40,6 +40,7 @@ export function DataTableRowActions<TData>({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
+        className="w-max"
         onCloseAutoFocus={(event) => event.preventDefault()}
       >
         {canEdit && (

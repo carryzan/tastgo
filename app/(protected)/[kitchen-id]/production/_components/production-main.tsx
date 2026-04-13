@@ -137,6 +137,7 @@ export function ProductionMain({ initialServicePeriods }: ProductionMainProps) {
     from: BATCHES_FROM,
     select: BATCHES_SELECT,
     columns: batchColumns,
+    searchColumn: 'production_recipes.name',
     kitchenId: kitchen.id,
   })
 

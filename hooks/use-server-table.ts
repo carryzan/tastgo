@@ -39,6 +39,38 @@ interface UseServerTableOptions<TData> {
   getKitchenAssetUrl?: (row: TData) => string | null
 }
 
+/**
+ * Collect foreign table names from dot-notation column references
+ * e.g. "production_recipes.name" → "production_recipes"
+ */
+function extractForeignTables(columns: string[]): Set<string> {
+  const tables = new Set<string>()
+  for (const col of columns) {
+    const dotIndex = col.indexOf('.')
+    if (dotIndex !== -1) tables.add(col.slice(0, dotIndex))
+  }
+  return tables
+}
+
+/**
+ * For each foreign table being filtered/searched, inject `!inner` into the
+ * select string so PostgREST excludes parent rows that have no matching child.
+ *
+ * e.g. "production_recipes!production_recipe_id(id, name)"
+ *    → "production_recipes!production_recipe_id!inner(id, name)"
+ */
+function addInnerJoins(select: string, foreignTables: Set<string>): string {
+  let result = select
+  for (const table of foreignTables) {
+    // Skip if !inner is already present for this table
+    if (new RegExp(`${table}[^(]*!inner`).test(result)) continue
+    // Insert !inner right before the opening parenthesis
+    const regex = new RegExp(`(${table}[^(]*)(\\()`)
+    result = result.replace(regex, '$1!inner$2')
+  }
+  return result
+}
+
 function applyFilter(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   query: any,
@@ -116,10 +148,17 @@ export function useServerTable<TData extends { id: string }>({
 
   const fetchPage = useCallback(
     async (pageIndex: number): Promise<PageResult<TData>> => {
+      // Collect all foreign-table columns used in filters / search so we can
+      // add !inner joins and ensure PostgREST excludes non-matching parents.
+      const foreignCols = activeFilters.map((f) => f.column)
+      if (deferredSearch && searchColumn) foreignCols.push(searchColumn)
+      const foreignTables = extractForeignTables(foreignCols)
+      const effectiveSelect = addInnerJoins(select, foreignTables)
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let query: any = supabase
         .from(from)
-        .select(select, { count: 'exact' })
+        .select(effectiveSelect, { count: 'exact' })
         .eq('kitchen_id', kitchenId)
 
       for (const filter of activeFilters) {
@@ -132,7 +171,14 @@ export function useServerTable<TData extends { id: string }>({
 
       if (sorting.length > 0) {
         for (const sort of sorting) {
-          query = query.order(sort.id, { ascending: !sort.desc })
+          if (sort.id.includes('.')) {
+            const dotIndex = sort.id.indexOf('.')
+            const foreignTable = sort.id.slice(0, dotIndex)
+            const column = sort.id.slice(dotIndex + 1)
+            query = query.order(column, { ascending: !sort.desc, foreignTable })
+          } else {
+            query = query.order(sort.id, { ascending: !sort.desc })
+          }
         }
       } else {
         query = query.order('created_at', { ascending: false })

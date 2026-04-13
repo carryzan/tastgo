@@ -27,6 +27,9 @@ export interface Batch {
 }
 
 export const batchColumnConfigs: ColumnConfig[] = [
+  { column: 'production_recipes.name', label: 'Recipe', type: 'text', sortable: true },
+  { column: 'production_recipe_versions.version_number', label: 'Version', type: 'number', sortable: true },
+  { column: 'production_service_periods.name', label: 'Service Period', type: 'text', sortable: true },
   { column: 'target_quantity', label: 'Target Qty', type: 'number', sortable: true },
   { column: 'actual_quantity', label: 'Actual Qty', type: 'number', sortable: true },
   { column: 'cost_per_unit', label: 'Cost/Unit', type: 'number', sortable: true },
