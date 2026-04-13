@@ -72,15 +72,16 @@ export function InventoryMain({ initialCategories }: InventoryMainProps) {
     [permissions, handleEdit, handleDelete, extraItems]
   )
 
-  const { table, isFetching, deleteMutation } = useServerTable<InventoryItem>({
-    queryKey: INVENTORY_QUERY_KEY,
-    from: INVENTORY_FROM,
-    select: INVENTORY_SELECT,
-    columns,
-    searchColumn: 'name',
-    kitchenId: kitchen.id,
-    getKitchenAssetUrl,
-  })
+  const { table, isFetching, deleteMutation, search, setSearch } =
+    useServerTable<InventoryItem>({
+      queryKey: INVENTORY_QUERY_KEY,
+      from: INVENTORY_FROM,
+      select: INVENTORY_SELECT,
+      columns,
+      searchColumn: 'name',
+      kitchenId: kitchen.id,
+      getKitchenAssetUrl,
+    })
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -89,6 +90,8 @@ export function InventoryMain({ initialCategories }: InventoryMainProps) {
         kitchenId={kitchen.id}
         categories={initialCategories}
         onAddItem={() => setAddOpen(true)}
+        search={search}
+        onSearchChange={setSearch}
       />
       <DataTable table={table} isFetching={isFetching} />
       <AddInventoryItemSheet
