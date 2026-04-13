@@ -10,7 +10,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
-import { Label } from '@/components/ui/label'
 import {
   Sheet,
   SheetClose,
@@ -22,7 +21,6 @@ import {
 } from '@/components/ui/sheet'
 import {
   Field,
-  FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
@@ -167,17 +165,16 @@ export function EditModifierGroupSheet({
                   />
                 </Field>
               </div>
-              <div className="flex items-center justify-between rounded-lg border p-3">
-                <div>
-                  <Label htmlFor="mg-active">Active</Label>
-                  <FieldDescription>Turn off to hide the whole group.</FieldDescription>
+              <Field>
+                <div className="flex items-center justify-between">
+                  <FieldLabel htmlFor="mg-active">Active</FieldLabel>
+                  <Switch
+                    id="mg-active"
+                    checked={groupActive}
+                    onCheckedChange={setGroupActive}
+                  />
                 </div>
-                <Switch
-                  id="mg-active"
-                  checked={groupActive}
-                  onCheckedChange={setGroupActive}
-                />
-              </div>
+              </Field>
             </FieldGroup>
           </div>
           {error && (

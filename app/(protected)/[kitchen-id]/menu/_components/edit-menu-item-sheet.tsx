@@ -26,7 +26,6 @@ import {
 } from '@/components/ui/sheet'
 import {
   Field,
-  FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
@@ -263,17 +262,16 @@ export function EditMenuItemSheet({
                   </div>
                 )}
               </Field>
-              <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
-                <div>
-                  <Label htmlFor="edit-mi-active">Active</Label>
-                  <FieldDescription>Inactive items stay off the menu.</FieldDescription>
+              <Field>
+                <div className="flex items-center justify-between">
+                  <FieldLabel htmlFor="edit-mi-active">Active</FieldLabel>
+                  <Switch
+                    id="edit-mi-active"
+                    checked={isActive}
+                    onCheckedChange={setIsActive}
+                  />
                 </div>
-                <Switch
-                  id="edit-mi-active"
-                  checked={isActive}
-                  onCheckedChange={setIsActive}
-                />
-              </div>
+              </Field>
             </FieldGroup>
           </div>
           {error && (

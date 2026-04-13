@@ -24,7 +24,6 @@ import {
 } from '@/components/ui/sheet'
 import {
   Field,
-  FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
@@ -218,17 +217,16 @@ export function EditComboSheet({
                   </div>
                 )}
               </Field>
-              <div className="flex items-center justify-between rounded-lg border p-3">
-                <div>
-                  <Label htmlFor="ec-active">Active</Label>
-                  <FieldDescription>Inactive combos stay hidden.</FieldDescription>
+              <Field>
+                <div className="flex items-center justify-between">
+                  <FieldLabel htmlFor="ec-active">Active</FieldLabel>
+                  <Switch
+                    id="ec-active"
+                    checked={comboActive}
+                    onCheckedChange={setComboActive}
+                  />
                 </div>
-                <Switch
-                  id="ec-active"
-                  checked={comboActive}
-                  onCheckedChange={setComboActive}
-                />
-              </div>
+              </Field>
             </FieldGroup>
           </div>
           {error && (

@@ -23,7 +23,6 @@ import {
 } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
-import { Label } from '@/components/ui/label'
 import { MenuBrandField, useMenuBrandOptions } from './menu-brand-field'
 
 interface EditMenuProps {
@@ -150,19 +149,16 @@ export function EditMenu({
                 defaultValue={menu.sort_order}
               />
             </Field>
-            <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
-              <div className="space-y-0.5">
-                <Label htmlFor="edit-menu-active">Active</Label>
-                <p className="text-muted-foreground text-xs">
-                  Inactive menus stay hidden from new items.
-                </p>
+            <Field>
+              <div className="flex items-center justify-between">
+                <FieldLabel htmlFor="edit-menu-active">Active</FieldLabel>
+                <Switch
+                  id="edit-menu-active"
+                  checked={isActive}
+                  onCheckedChange={setIsActive}
+                />
               </div>
-              <Switch
-                id="edit-menu-active"
-                checked={isActive}
-                onCheckedChange={setIsActive}
-              />
-            </div>
+            </Field>
           </FieldGroup>
           {error && <FieldError className="mt-2">{error}</FieldError>}
           <DialogFooter className="mt-4">
