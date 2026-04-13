@@ -14,6 +14,14 @@ import {
   FieldLabel,
 } from '@/components/ui/field'
 import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from '@/components/ui/combobox'
+import {
   Select,
   SelectContent,
   SelectGroup,
@@ -71,6 +79,19 @@ export function InventoryItemForm({
     if (!current || current.is_active) return active
     return [...active, current]
   }, [categories, defaultValues?.category_id])
+
+  const categoryItems = useMemo(
+    () => ['__none__', ...selectableCategories.map((c) => c.id)],
+    [selectableCategories]
+  )
+
+  const categoryLabelById = useMemo(() => {
+    const map = new Map<string, string>([['__none__', 'None']])
+    for (const c of selectableCategories) {
+      map.set(c.id, c.name)
+    }
+    return map
+  }, [selectableCategories])
 
   const [categoryId, setCategoryId] = useState<string>(
     defaultValues?.category_id ?? '__none__'
@@ -143,21 +164,33 @@ export function InventoryItemForm({
           <Field>
             <FieldLabel htmlFor="item-category">Category</FieldLabel>
             <input type="hidden" name="category_id" value={categoryId === '__none__' ? '' : categoryId} />
-            <Select value={categoryId} onValueChange={setCategoryId}>
-              <SelectTrigger id="item-category" className="w-full">
-                <SelectValue placeholder="Select a category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectItem value="__none__">None</SelectItem>
-                  {selectableCategories.map((cat) => (
-                    <SelectItem key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
+            <div className="relative z-100">
+              <Combobox
+                items={categoryItems}
+                value={categoryId}
+                onValueChange={(next) => {
+                  setCategoryId(next ?? '__none__')
+                }}
+                modal={true}
+                itemToStringLabel={(id) => categoryLabelById.get(String(id)) ?? ''}
+              >
+                <ComboboxInput
+                  id="item-category"
+                  placeholder="Select a category"
+                  className="w-full"
+                />
+                <ComboboxContent className="z-100 pointer-events-auto">
+                  <ComboboxEmpty>No categories found.</ComboboxEmpty>
+                  <ComboboxList>
+                    {(item: string) => (
+                      <ComboboxItem key={item} value={item}>
+                        {categoryLabelById.get(item) ?? item}
+                      </ComboboxItem>
+                    )}
+                  </ComboboxList>
+                </ComboboxContent>
+              </Combobox>
+            </div>
           </Field>
 
           <Field>
