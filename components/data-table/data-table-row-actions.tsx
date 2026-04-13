@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react'
 import type { Row } from '@tanstack/react-table'
-import { MoreHorizontalIcon, PencilIcon, EyeIcon, TrashIcon } from 'lucide-react'
+import { MoreHorizontalIcon, PencilIcon, TrashIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -42,10 +42,12 @@ export function DataTableRowActions<TData>({
       <DropdownMenuContent
         onCloseAutoFocus={(event) => event.preventDefault()}
       >
-        <DropdownMenuItem onClick={() => onEdit(row)}>
-          {canEdit ? <PencilIcon /> : <EyeIcon />}
-          {canEdit ? 'Edit' : 'View'}
-        </DropdownMenuItem>
+        {canEdit && (
+          <DropdownMenuItem onClick={() => onEdit(row)}>
+            <PencilIcon />
+            Edit
+          </DropdownMenuItem>
+        )}
         {extraItems?.(row)}
         {canDelete && (
           <DropdownMenuItem
@@ -60,3 +62,4 @@ export function DataTableRowActions<TData>({
     </DropdownMenu>
   )
 }
+

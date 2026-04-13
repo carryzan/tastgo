@@ -21,7 +21,7 @@ interface RecipeFormProps {
   defaultValues?: RecipeFormValues
   disableTrackStock?: boolean
   error: string | null
-  children: React.ReactNode
+  children?: React.ReactNode
 }
 
 export function RecipeForm({
@@ -36,7 +36,7 @@ export function RecipeForm({
 
   return (
     <>
-      <div className="grid flex-1 auto-rows-min gap-6 px-4">
+      <div className="grid auto-rows-min gap-6 px-4 pb-5">
         <FieldGroup>
           <Field>
             <FieldLabel htmlFor="recipe-name">Name</FieldLabel>
@@ -67,7 +67,7 @@ export function RecipeForm({
 
           <Field>
             <FieldLabel htmlFor="recipe-variance">
-              Variance Tolerance %
+              Variance Tolerance (%)
             </FieldLabel>
             <Input
               id="recipe-variance"
@@ -82,7 +82,7 @@ export function RecipeForm({
               }
             />
             <FieldDescription>
-              Acceptable variance between theoretical and actual usage.
+              Acceptable variance between TvA usage.
             </FieldDescription>
           </Field>
         </FieldGroup>

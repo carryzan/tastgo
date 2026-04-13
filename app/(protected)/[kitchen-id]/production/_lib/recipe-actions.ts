@@ -15,8 +15,6 @@ interface CreateRecipeData {
   name: string
   track_stock: boolean
   variance_tolerance_percentage: number | null
-  created_by: string
-  components: RecipeComponent[]
 }
 
 interface UpdateRecipeData {
@@ -27,46 +25,13 @@ interface UpdateRecipeData {
 
 export async function createRecipe(data: CreateRecipeData) {
   const supabase = await createClient()
-  const { kitchen_id, name, track_stock, variance_tolerance_percentage, created_by, components } = data
+  const { kitchen_id, name, track_stock, variance_tolerance_percentage } = data
 
-  const { data: recipe, error: recipeError } = await supabase
+  const { error } = await supabase
     .from('production_recipes')
     .insert({ kitchen_id, name, track_stock, variance_tolerance_percentage })
-    .select('id')
-    .single()
 
-  if (recipeError) return new Error(recipeError.message)
-
-  const { data: version, error: versionError } = await supabase
-    .from('production_recipe_versions')
-    .insert({ kitchen_id, production_recipe_id: recipe.id, version_number: 1, created_by })
-    .select('id')
-    .single()
-
-  if (versionError) return new Error(versionError.message)
-
-  if (components.length > 0) {
-    const { error: componentsError } = await supabase
-      .from('production_recipe_components')
-      .insert(
-        components.map((c) => ({
-          kitchen_id,
-          recipe_version_id: version.id,
-          inventory_item_id: c.inventory_item_id,
-          recipe_quantity: c.recipe_quantity,
-          yield_adjusted_quantity: c.yield_adjusted_quantity,
-          uom_id: c.uom_id,
-        }))
-      )
-    if (componentsError) return new Error(componentsError.message)
-  }
-
-  const { error: updateError } = await supabase
-    .from('production_recipes')
-    .update({ current_version_id: version.id })
-    .eq('id', recipe.id)
-
-  if (updateError) return new Error(updateError.message)
+  if (error) return new Error(error.message)
 
   revalidatePath('/[kitchen-id]', 'layout')
 }
@@ -114,7 +79,7 @@ export async function createRecipeVersion(data: {
     .eq('production_recipe_id', production_recipe_id)
     .order('version_number', { ascending: false })
     .limit(1)
-    .single()
+    .maybeSingle()
 
   if (maxError) return new Error(maxError.message)
 

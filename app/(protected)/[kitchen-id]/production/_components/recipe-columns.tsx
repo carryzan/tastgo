@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react'
 import type { ColumnDef, Row } from '@tanstack/react-table'
-import { BookOpenIcon } from 'lucide-react'
+import { BookOpenIcon, PlusCircleIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { getSelectColumn } from '@/components/data-table/data-table-select-column'
@@ -40,16 +40,23 @@ export function getRecipeColumns(
   callbacks: {
     onEdit: (row: Row<Recipe>) => void
     onDelete: (row: Row<Recipe>) => void
-    onManageVersions: (row: Row<Recipe>) => void
+    onVersionHistory: (row: Row<Recipe>) => void
+    onNewVersion: (row: Row<Recipe>) => void
   }
 ): ColumnDef<Recipe>[] {
   const showRowActions = Boolean(permissions.canEdit || permissions.canDelete)
 
   const extraItems = (row: Row<Recipe>): ReactNode => (
-    <DropdownMenuItem onClick={() => callbacks.onManageVersions(row)}>
-      <BookOpenIcon />
-      Manage Versions
-    </DropdownMenuItem>
+    <>
+      <DropdownMenuItem onClick={() => callbacks.onVersionHistory(row)}>
+        <BookOpenIcon />
+        Version History
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={() => callbacks.onNewVersion(row)}>
+        <PlusCircleIcon />
+        New Version
+      </DropdownMenuItem>
+    </>
   )
 
   return [

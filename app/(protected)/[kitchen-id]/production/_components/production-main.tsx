@@ -15,9 +15,10 @@ import { ProductionSiteHeader } from './production-site-header'
 import { RecipesMain } from './recipes-main'
 import { BatchesMain } from './batches-main'
 import { CreateBatchDialog } from './create-batch-dialog'
-import { AddRecipeSheet } from './add-recipe-sheet'
+import { AddRecipeDialog } from './add-recipe-dialog'
 import { EditRecipeSheet } from './edit-recipe-dialog'
-import { RecipeVersionSheet } from './recipe-version-sheet'
+import { VersionHistorySheet } from './version-history-sheet'
+import { AddVersionSheet } from './add-version-sheet'
 import { CompleteBatchDialog } from './complete-batch-dialog'
 import { DataTableDeleteDialog } from '@/components/data-table/data-table-delete-dialog'
 import {
@@ -57,7 +58,8 @@ export function ProductionMain({ initialServicePeriods }: ProductionMainProps) {
   const [addRecipeOpen, setAddRecipeOpen] = useState(false)
   const [editRecipe, setEditRecipe] = useState<Recipe | null>(null)
   const [deleteRecipe, setDeleteRecipe] = useState<Recipe | null>(null)
-  const [versionRecipe, setVersionRecipe] = useState<Recipe | null>(null)
+  const [versionHistoryRecipe, setVersionHistoryRecipe] = useState<Recipe | null>(null)
+  const [newVersionRecipe, setNewVersionRecipe] = useState<Recipe | null>(null)
 
   const handleEditRecipe = useCallback(
     (row: Row<Recipe>) => setEditRecipe(row.original),
@@ -67,8 +69,12 @@ export function ProductionMain({ initialServicePeriods }: ProductionMainProps) {
     (row: Row<Recipe>) => setDeleteRecipe(row.original),
     []
   )
-  const handleManageVersions = useCallback(
-    (row: Row<Recipe>) => setVersionRecipe(row.original),
+  const handleVersionHistory = useCallback(
+    (row: Row<Recipe>) => setVersionHistoryRecipe(row.original),
+    []
+  )
+  const handleNewVersion = useCallback(
+    (row: Row<Recipe>) => setNewVersionRecipe(row.original),
     []
   )
 
@@ -77,9 +83,10 @@ export function ProductionMain({ initialServicePeriods }: ProductionMainProps) {
       getRecipeColumns(permissions, {
         onEdit: handleEditRecipe,
         onDelete: handleDeleteRecipe,
-        onManageVersions: handleManageVersions,
+        onVersionHistory: handleVersionHistory,
+        onNewVersion: handleNewVersion,
       }),
-    [permissions, handleEditRecipe, handleDeleteRecipe, handleManageVersions]
+    [permissions, handleEditRecipe, handleDeleteRecipe, handleVersionHistory, handleNewVersion]
   )
 
   const {
@@ -187,7 +194,7 @@ export function ProductionMain({ initialServicePeriods }: ProductionMainProps) {
         </TabsContent>
       </Tabs>
 
-      <AddRecipeSheet open={addRecipeOpen} onOpenChange={setAddRecipeOpen} />
+      <AddRecipeDialog open={addRecipeOpen} onOpenChange={setAddRecipeOpen} />
       {editRecipe && (
         <EditRecipeSheet
           recipe={editRecipe}
@@ -197,12 +204,21 @@ export function ProductionMain({ initialServicePeriods }: ProductionMainProps) {
           }}
         />
       )}
-      {versionRecipe && (
-        <RecipeVersionSheet
-          recipe={versionRecipe}
-          open={!!versionRecipe}
+      {versionHistoryRecipe && (
+        <VersionHistorySheet
+          recipe={versionHistoryRecipe}
+          open={!!versionHistoryRecipe}
           onOpenChange={(next) => {
-            if (!next) setVersionRecipe(null)
+            if (!next) setVersionHistoryRecipe(null)
+          }}
+        />
+      )}
+      {newVersionRecipe && (
+        <AddVersionSheet
+          recipe={newVersionRecipe}
+          open={!!newVersionRecipe}
+          onOpenChange={(next) => {
+            if (!next) setNewVersionRecipe(null)
           }}
         />
       )}
