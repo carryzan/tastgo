@@ -1,0 +1,86 @@
+'use client'
+
+import type { ColumnDef } from '@tanstack/react-table'
+import { getSelectColumn } from '@/components/data-table/data-table-select-column'
+import type { ColumnConfig } from '@/lib/types/data-table'
+
+export interface SupplierPayment {
+  id: string
+  kitchen_id: string
+  purchase_id: string
+  supplier_id: string
+  amount: string | number
+  cash_account_id: string
+  cash_transaction_id: string
+  outstanding_balance: string | number
+  paid_by: string
+  created_at: string
+  suppliers: { id: string; name: string } | null
+  purchases: { id: string; purchase_number: number } | null
+  cash_accounts: { id: string; name: string } | null
+  paid_member: { id: string; profiles: { full_name: string } | null } | null
+}
+
+export const paymentColumnConfigs: ColumnConfig[] = [
+  { column: 'amount', label: 'Amount', type: 'number', sortable: true },
+  { column: 'created_at', label: 'Date', type: 'date', sortable: true },
+]
+
+function formatAmount(value: string | number) {
+  const n = typeof value === 'string' ? Number(value) : value
+  if (Number.isNaN(n)) return '—'
+  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+export function getPaymentColumns(): ColumnDef<SupplierPayment>[] {
+  return [
+    getSelectColumn<SupplierPayment>(),
+    {
+      id: 'supplier',
+      header: 'Supplier',
+      cell: ({ row }) => row.original.suppliers?.name ?? '—',
+      enableSorting: false,
+    },
+    {
+      id: 'purchase',
+      header: 'Purchase',
+      cell: ({ row }) =>
+        row.original.purchases
+          ? `#${row.original.purchases.purchase_number}`
+          : '—',
+      enableSorting: false,
+    },
+    {
+      accessorKey: 'amount',
+      header: 'Amount',
+      cell: ({ row }) => (
+        <span className="font-medium">{formatAmount(row.original.amount)}</span>
+      ),
+      enableSorting: true,
+    },
+    {
+      id: 'cash_account',
+      header: 'Cash account',
+      cell: ({ row }) => row.original.cash_accounts?.name ?? '—',
+      enableSorting: false,
+    },
+    {
+      id: 'paid_by',
+      header: 'Paid by',
+      cell: ({ row }) =>
+        row.original.paid_member?.profiles?.full_name ?? '—',
+      enableSorting: false,
+    },
+    {
+      accessorKey: 'created_at',
+      header: 'Date',
+      cell: ({ row }) =>
+        new Date(row.original.created_at).toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        }),
+      enableSorting: true,
+    },
+  ]
+}

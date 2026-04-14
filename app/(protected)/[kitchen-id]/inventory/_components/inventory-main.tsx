@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useCallback } from 'react'
-import { RulerIcon } from 'lucide-react'
+import { RulerIcon, TruckIcon } from 'lucide-react'
 import type { Row } from '@tanstack/react-table'
 import { useKitchen } from '@/hooks/use-kitchen'
 import { useServerTable } from '@/hooks/use-server-table'
@@ -17,6 +17,7 @@ import { InventorySiteHeader } from './inventory-site-header'
 import { AddInventoryItemSheet } from './add-inventory-item-sheet'
 import { EditInventoryItemSheet } from './edit-inventory-item-sheet'
 import { UOMConfigDialog } from './uom-config-dialog'
+import { ManageItemSuppliersSheet } from './manage-item-suppliers-sheet'
 import {
   INVENTORY_QUERY_KEY,
   INVENTORY_SELECT,
@@ -41,6 +42,7 @@ export function InventoryMain({ initialCategories }: InventoryMainProps) {
   const [editItem, setEditItem] = useState<InventoryItem | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<InventoryItem | null>(null)
   const [uomConfigItem, setUomConfigItem] = useState<InventoryItem | null>(null)
+  const [manageSuppliersItem, setManageSuppliersItem] = useState<InventoryItem | null>(null)
 
   const handleEdit = useCallback((row: Row<InventoryItem>) => {
     setEditItem(row.original)
@@ -54,10 +56,16 @@ export function InventoryMain({ initialCategories }: InventoryMainProps) {
 
   const extraItems = useCallback(
     (row: Row<InventoryItem>) => (
-      <DropdownMenuItem onClick={() => setUomConfigItem(row.original)}>
-        <RulerIcon />
-        UOM Config
-      </DropdownMenuItem>
+      <>
+        <DropdownMenuItem onClick={() => setUomConfigItem(row.original)}>
+          <RulerIcon />
+          UOM Config
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setManageSuppliersItem(row.original)}>
+          <TruckIcon />
+          Manage Suppliers
+        </DropdownMenuItem>
+      </>
     ),
     []
   )
@@ -130,6 +138,15 @@ export function InventoryMain({ initialCategories }: InventoryMainProps) {
           open={!!uomConfigItem}
           onOpenChange={(next) => {
             if (!next) setUomConfigItem(null)
+          }}
+        />
+      )}
+      {manageSuppliersItem && (
+        <ManageItemSuppliersSheet
+          item={manageSuppliersItem}
+          open
+          onOpenChange={(next) => {
+            if (!next) setManageSuppliersItem(null)
           }}
         />
       )}
