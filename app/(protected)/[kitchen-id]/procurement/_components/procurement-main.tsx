@@ -2,7 +2,6 @@
 
 import { useCallback, useMemo, useState, useTransition, type ReactNode } from 'react'
 import type { Row } from '@tanstack/react-table'
-import { PlusIcon } from 'lucide-react'
 import { useKitchen } from '@/hooks/use-kitchen'
 import { useServerTable } from '@/hooks/use-server-table'
 import { useQueryClient } from '@tanstack/react-query'
@@ -260,7 +259,6 @@ export function ProcurementMain() {
       <DataTableFilter table={supplierTable} columnConfigs={supplierColumnConfigs} />
       <DataTableSort table={supplierTable} columnConfigs={supplierColumnConfigs} />
       <Button size="sm" onClick={() => setAddSupplierOpen(true)}>
-        <PlusIcon />
         Add Supplier
       </Button>
     </>
@@ -272,7 +270,6 @@ export function ProcurementMain() {
       <DataTableFilter table={purchaseTable} columnConfigs={purchaseColumnConfigs} />
       <DataTableSort table={purchaseTable} columnConfigs={purchaseColumnConfigs} />
       <Button size="sm" onClick={() => setAddPurchaseOpen(true)}>
-        <PlusIcon />
         Add Purchase
       </Button>
     </>
@@ -292,7 +289,6 @@ export function ProcurementMain() {
       <DataTableFilter table={returnTable} columnConfigs={returnColumnConfigs} />
       <DataTableSort table={returnTable} columnConfigs={returnColumnConfigs} />
       <Button size="sm" onClick={() => setAddReturnOpen(true)}>
-        <PlusIcon />
         Add Return
       </Button>
     </>
