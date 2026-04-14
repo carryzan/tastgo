@@ -31,9 +31,14 @@ interface UpdateInventoryItemData {
 
 export async function createInventoryItem(data: CreateInventoryItemData) {
   const supabase = await createClient()
-  const { error } = await supabase.from('inventory_items').insert(data)
+  const { data: item, error } = await supabase
+    .from('inventory_items')
+    .insert(data)
+    .select('id')
+    .single()
   if (error) return new Error(error.message)
   revalidatePath('/[kitchen-id]', 'layout')
+  return item.id as string
 }
 
 export async function updateInventoryItem(

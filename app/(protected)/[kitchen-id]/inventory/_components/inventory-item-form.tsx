@@ -58,6 +58,7 @@ interface InventoryItemFormProps {
   removeImage: boolean
   onRemoveImageChange: (remove: boolean) => void
   error: string | null
+  afterFields?: React.ReactNode
   children: React.ReactNode
 }
 
@@ -69,6 +70,7 @@ export function InventoryItemForm({
   removeImage,
   onRemoveImageChange,
   error,
+  afterFields,
   children,
 }: InventoryItemFormProps) {
   const selectableCategories = useMemo(() => {
@@ -276,6 +278,7 @@ export function InventoryItemForm({
             />
           </Field>
         </FieldGroup>
+        {afterFields}
       </div>
       {error && (
         <div className="px-4">

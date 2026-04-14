@@ -50,9 +50,9 @@ export function Inventory() {
 
       <Item className="p-0">
         <ItemContent>
-          <ItemTitle>Opening inventory finalized</ItemTitle>
+          <ItemTitle>Starting inventory locked</ItemTitle>
           <ItemDescription>
-            Mark the opening inventory as completed.
+            Mark the starting inventory as completed.
           </ItemDescription>
         </ItemContent>
         <ItemActions>
@@ -67,7 +67,7 @@ export function Inventory() {
 
       <FieldGroup>
         <Field>
-          <FieldLabel>Opening Inventory Date</FieldLabel>
+          <FieldLabel>Starting Inventory Date</FieldLabel>
           <Popover>
             <PopoverTrigger asChild>
               <Button
@@ -94,7 +94,7 @@ export function Inventory() {
             </PopoverContent>
           </Popover>
           <FieldDescription>
-            The date when the opening inventory was recorded.
+            The date when the starting inventory was recorded.
           </FieldDescription>
         </Field>
       </FieldGroup>

@@ -1,9 +1,16 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { useKitchen } from '@/hooks/use-kitchen'
 import { useKitchenUpload } from '@/hooks/use-kitchen-upload'
 import { updateInventoryItem } from '../_lib/item-actions'
+import {
+  getItemOpeningBalance,
+  createOpeningBalance,
+  deleteOpeningBalance,
+  type OpeningBalance,
+} from '../_lib/opening-balance-actions'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import {
@@ -16,6 +23,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { InventoryItemForm, parseFormValues } from './inventory-item-form'
+import { OpeningBalanceSection } from './opening-balance-section'
 import type { InventoryItem } from './columns'
 import { INVENTORY_QUERY_KEY } from '../_lib/queries'
 import type { InventoryCategory } from '../_lib/inventory-categories'
@@ -33,12 +41,33 @@ export function EditInventoryItemSheet({
   onOpenChange,
   categories,
 }: EditInventoryItemSheetProps) {
+  const { kitchen, kitchenSettings, membership } = useKitchen()
   const { upload, remove } = useKitchenUpload('inventory')
   const queryClient = useQueryClient()
   const [file, setFile] = useState<File | null>(null)
   const [removeImage, setRemoveImage] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
+
+  const openingDate =
+    kitchenSettings && typeof kitchenSettings.opening_inventory_date === 'string'
+      ? kitchenSettings.opening_inventory_date
+      : null
+  const showOB =
+    kitchenSettings?.opening_inventory_completed !== true && !!openingDate
+
+  const [balance, setBalance] = useState<OpeningBalance | null>(null)
+  const [balanceLoaded, setBalanceLoaded] = useState(false)
+  const [removeBalance, setRemoveBalance] = useState(false)
+
+  useEffect(() => {
+    if (!open || !showOB) return
+    setBalanceLoaded(false)
+    getItemOpeningBalance(kitchen.id, item.id).then((result) => {
+      if (!(result instanceof Error)) setBalance(result)
+      setBalanceLoaded(true)
+    })
+  }, [open, item.id, kitchen.id, showOB])
 
   function handleOpenChange(next: boolean) {
     if (pending) return
@@ -47,6 +76,9 @@ export function EditInventoryItemSheet({
       setError(null)
       setFile(null)
       setRemoveImage(false)
+      setBalance(null)
+      setBalanceLoaded(false)
+      setRemoveBalance(false)
     }
   }
 
@@ -89,8 +121,30 @@ export function EditInventoryItemSheet({
           if (result instanceof Error) return setError(result.message)
         }
 
+        if (removeBalance && balance?.id) {
+          const delResult = await deleteOpeningBalance(balance.id)
+          if (delResult instanceof Error) return setError(delResult.message)
+        } else if (!balance && showOB && openingDate) {
+          const fd = new FormData(form)
+          const obQty = parseFloat(fd.get('ob_quantity') as string)
+          const obCost = parseFloat(fd.get('ob_unit_cost') as string)
+          if (obQty > 0 && obCost > 0) {
+            const obResult = await createOpeningBalance({
+              kitchen_id: kitchen.id,
+              inventory_item_id: item.id,
+              quantity: obQty,
+              unit_cost: obCost,
+              as_of_date: openingDate,
+              created_by: (membership as unknown as { id: string }).id,
+            })
+            if (obResult instanceof Error) return setError(obResult.message)
+          }
+        }
+
         setFile(null)
         setRemoveImage(false)
+        setBalance(null)
+        setRemoveBalance(false)
         onOpenChange(false)
         queryClient.invalidateQueries({ queryKey: INVENTORY_QUERY_KEY })
       } catch {
@@ -139,6 +193,15 @@ export function EditInventoryItemSheet({
             removeImage={removeImage}
             onRemoveImageChange={setRemoveImage}
             error={error}
+            afterFields={
+              showOB && balanceLoaded && openingDate ? (
+                <OpeningBalanceSection
+                  balance={balance}
+                  removeBalance={removeBalance}
+                  onRemoveBalanceChange={setRemoveBalance}
+                />
+              ) : undefined
+            }
           >
             <SheetFooter>
               <Button type="submit" disabled={pending} className="min-w-28">
