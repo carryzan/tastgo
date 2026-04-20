@@ -17,7 +17,7 @@ import type { ColumnConfig } from '@/lib/types/data-table'
 export interface DrawerSession {
   id: string
   kitchen_id: string
-  status: 'open' | 'paused' | 'closed'
+  status: 'open' | 'closed'
   opening_balance: string | number
   expected_closing_balance: string | number
   actual_closing_balance: string | number | null
@@ -28,13 +28,29 @@ export interface DrawerSession {
   opened_at: string
   closed_at: string | null
   updated_at: string
+  drawer_account_id: string
+  reopened_by: string | null
+  reopened_at: string | null
+  reopen_reason: string | null
   opened_member: { id: string; profiles: { full_name: string } | null } | null
   closed_member: { id: string; profiles: { full_name: string } | null } | null
+  reopened_member: { id: string; profiles: { full_name: string } | null } | null
+  drawer_account: { id: string; code: string; name: string } | null
 }
 
 export const drawerSessionColumnConfigs: ColumnConfig[] = [
-  { column: 'status', label: 'Status', type: 'select', options: ['open', 'paused', 'closed'] },
-  { column: 'opening_balance', label: 'Opening Balance', type: 'number', sortable: true },
+  {
+    column: 'status',
+    label: 'Status',
+    type: 'select',
+    options: ['open', 'closed'],
+  },
+  {
+    column: 'opening_balance',
+    label: 'Opening Balance',
+    type: 'number',
+    sortable: true,
+  },
   { column: 'opened_at', label: 'Opened At', type: 'date', sortable: true },
   { column: 'closed_at', label: 'Closed At', type: 'date', sortable: true },
 ]
@@ -49,17 +65,23 @@ function formatAmount(value: string | number | null) {
   })
 }
 
-function StatusBadge({ status }: { status: DrawerSession['status'] }) {
+function StatusBadge({ session }: { session: DrawerSession }) {
   const styles = {
     open: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-    paused: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
     closed: 'bg-muted text-muted-foreground',
   }
   return (
-    <span
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize ${styles[status]}`}
-    >
-      {status}
+    <span className="inline-flex items-center gap-1.5">
+      <span
+        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize ${styles[session.status]}`}
+      >
+        {session.status}
+      </span>
+      {session.status === 'open' && session.reopened_at !== null && (
+        <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+          Reopened
+        </span>
+      )}
     </span>
   )
 }
@@ -95,11 +117,9 @@ function VarianceCell({
   )
 }
 
-export function getDrawerSessionColumns(
-  callbacks: {
-    onViewDetails: (row: Row<DrawerSession>) => void
-  }
-): ColumnDef<DrawerSession>[] {
+export function getDrawerSessionColumns(callbacks: {
+  onViewDetails: (row: Row<DrawerSession>) => void
+}): ColumnDef<DrawerSession>[] {
   const renderRowEnd = (row: Row<DrawerSession>): ReactNode => (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -125,7 +145,17 @@ export function getDrawerSessionColumns(
     {
       accessorKey: 'status',
       header: 'Status',
-      cell: ({ row }) => <StatusBadge status={row.original.status} />,
+      cell: ({ row }) => <StatusBadge session={row.original} />,
+      enableSorting: false,
+    },
+    {
+      id: 'drawer_account',
+      header: 'Drawer Account',
+      cell: ({ row }) => {
+        const acct = row.original.drawer_account
+        if (!acct) return '—'
+        return `${acct.code} · ${acct.name}`
+      },
       enableSorting: false,
     },
     {
@@ -160,7 +190,8 @@ export function getDrawerSessionColumns(
     {
       id: 'opened_member',
       header: 'Opened By',
-      cell: ({ row }) => row.original.opened_member?.profiles?.full_name ?? '—',
+      cell: ({ row }) =>
+        row.original.opened_member?.profiles?.full_name ?? '—',
       enableSorting: false,
     },
     {

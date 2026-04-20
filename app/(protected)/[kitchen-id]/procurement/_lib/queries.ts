@@ -10,7 +10,7 @@ export const PURCHASES_SELECT =
 export const PAYMENTS_QUERY_KEY = ['supplier-payments']
 export const PAYMENTS_FROM = 'supplier_payments'
 export const PAYMENTS_SELECT =
-  '*, suppliers!supplier_id(id, name), purchases!purchase_id(id, purchase_number), cash_accounts!cash_account_id(id, name), paid_member:kitchen_members!paid_by(id, profiles(full_name))'
+  '*, suppliers!supplier_id(id, name), purchases!reference_purchase_id(id, purchase_number), settlement_account:chart_of_accounts!settlement_account_id(id, code, name), paid_member:kitchen_members!paid_by(id, profiles(full_name))'
 
 export const RETURNS_QUERY_KEY = ['supplier-returns']
 export const RETURNS_FROM = 'supplier_returns'

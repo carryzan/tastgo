@@ -8,7 +8,7 @@ import {
   flexRender,
   type ColumnDef,
 } from '@tanstack/react-table'
-import { type DateRange } from 'react-day-picker'
+import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/spinner'
 import {
   Sheet,
@@ -26,30 +26,19 @@ import {
   TableRow,
 } from '@/components/data-table/data-table-primitives'
 import {
-  fetchCashAccountTransactions,
-  type CashAccountTransaction,
+  fetchAccountLedger,
+  fetchAccountBalance,
+  type AccountLedgerLine,
 } from '../_lib/client-queries'
-import type { CashAccount } from './cash-account-columns'
-import {
-  TransactionDateRangePicker,
-  filterByDateRange,
-} from './transaction-date-range-picker'
+import type { ChartAccount } from './cash-account-columns'
+import { ENTRY_TYPE_LABELS } from './journal-entry-columns'
 
 interface CashAccountTransactionsSheetProps {
-  account: CashAccount
+  account: ChartAccount
   open: boolean
   onOpenChange: (open: boolean) => void
 }
 
-const SOURCE_TYPE_LABELS: Record<string, string> = {
-  drawer_deposit: 'Drawer Deposit',
-  marketplace_payout: 'Marketplace Payout',
-  expense: 'Expense',
-  supplier_payment: 'Supplier Payment',
-  supplier_refund: 'Supplier Refund',
-  refund: 'Refund',
-  manual: 'Manual',
-}
 
 function formatAmount(value: string | number) {
   const n = typeof value === 'string' ? Number(value) : value
@@ -60,69 +49,70 @@ function formatAmount(value: string | number) {
   })
 }
 
-const columns: ColumnDef<CashAccountTransaction>[] = [
+const columns: ColumnDef<AccountLedgerLine>[] = [
   {
-    accessorKey: 'type',
-    header: 'Type',
+    id: 'date',
+    header: 'Date',
+    cell: ({ row }) =>
+      new Date(row.original.entry_date).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      }),
+  },
+  {
+    id: 'journal_number',
+    header: 'Journal #',
     cell: ({ row }) => (
-      <span className="capitalize">{row.original.type}</span>
+      <span className="font-mono text-xs">
+        #{row.original.journal_number}
+      </span>
     ),
   },
   {
-    id: 'source',
-    header: 'Source',
-    cell: ({ row }) => {
-      const { source_type } = row.original
-      if (!source_type) return '—'
-      return SOURCE_TYPE_LABELS[source_type] ?? source_type
-    },
+    id: 'type',
+    header: 'Type',
+    cell: ({ row }) => (
+      <Badge variant="outline" className="text-xs">
+        {ENTRY_TYPE_LABELS[row.original.entry_type] ?? row.original.entry_type}
+      </Badge>
+    ),
   },
   {
-    accessorKey: 'amount',
-    header: 'Amount',
+    id: 'memo',
+    header: 'Memo',
     cell: ({ row }) => {
-      const isCredit = row.original.type === 'deposit'
-      return (
-        <span
-          className={
-            isCredit
-              ? 'font-medium text-green-600 dark:text-green-400'
-              : 'font-medium text-destructive'
-          }
-        >
-          {isCredit ? '+' : '-'}
-          {formatAmount(row.original.amount)}
-        </span>
+      const memo = row.original.line_memo ?? row.original.memo
+      return memo ? (
+        <span className="max-w-48 truncate text-sm">{memo}</span>
+      ) : (
+        '—'
       )
     },
   },
   {
-    id: 'transfer_to',
-    header: 'Transfer To',
-    cell: ({ row }) => row.original.transfer_to_account?.name ?? '—',
+    accessorKey: 'debit',
+    header: 'Debit',
+    cell: ({ row }) => {
+      const d = Number(row.original.debit)
+      return d > 0 ? (
+        <span className="font-medium">{formatAmount(d)}</span>
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      )
+    },
   },
   {
-    accessorKey: 'reason',
-    header: 'Reason',
-    cell: ({ row }) => row.original.reason ?? '—',
-  },
-  {
-    id: 'created_by',
-    header: 'By',
-    cell: ({ row }) =>
-      row.original.created_member?.profiles?.full_name ?? '—',
-  },
-  {
-    accessorKey: 'created_at',
-    header: 'Date',
-    cell: ({ row }) =>
-      new Date(row.original.created_at).toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-      }),
+    accessorKey: 'credit',
+    header: 'Credit',
+    cell: ({ row }) => {
+      const c = Number(row.original.credit)
+      return c > 0 ? (
+        <span className="font-medium">{formatAmount(c)}</span>
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      )
+    },
   },
 ]
 
@@ -131,21 +121,20 @@ export function CashAccountTransactionsSheet({
   open,
   onOpenChange,
 }: CashAccountTransactionsSheetProps) {
-  const [dateRange, setDateRange] = React.useState<DateRange | undefined>()
-
-  const { data: transactions, isLoading } = useQuery({
-    queryKey: ['cash-account-transactions', account.id],
-    queryFn: () => fetchCashAccountTransactions(account.id),
+  const { data: lines, isLoading } = useQuery({
+    queryKey: ['account-ledger', account.id],
+    queryFn: () => fetchAccountLedger(account.id),
     enabled: open,
   })
 
-  const filtered = React.useMemo(
-    () => filterByDateRange(transactions ?? [], dateRange),
-    [transactions, dateRange]
-  )
+  const { data: balance } = useQuery({
+    queryKey: ['account-balance', account.id],
+    queryFn: () => fetchAccountBalance(account.id),
+    enabled: open,
+  })
 
   const table = useReactTable({
-    data: filtered,
+    data: lines ?? [],
     columns,
     getCoreRowModel: getCoreRowModel(),
   })
@@ -154,27 +143,33 @@ export function CashAccountTransactionsSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="flex flex-col gap-0 p-0">
+      <SheetContent className="flex flex-col gap-0 p-0 sm:max-w-2xl">
         <SheetHeader className="px-4 pt-4 pb-4">
-          <SheetTitle>{account.name}</SheetTitle>
+          <SheetTitle>
+            {account.code} · {account.name}
+          </SheetTitle>
           <SheetDescription>
-            Balance:{' '}
-            <span className="font-medium text-foreground">
-              {formatAmount(account.current_balance)}
-            </span>
+            {balance !== null && balance !== undefined ? (
+              <>
+                Balance:{' '}
+                <span className="font-medium text-foreground">
+                  {formatAmount(balance)}
+                </span>
+              </>
+            ) : (
+              'Account ledger — all journal entry lines for this account'
+            )}
           </SheetDescription>
         </SheetHeader>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="flex shrink-0 items-center justify-between px-4 py-2">
-            <p className="text-sm font-medium">Transaction History</p>
-            <TransactionDateRangePicker
-              value={dateRange}
-              onChange={setDateRange}
-            />
+          <div className="flex shrink-0 items-center justify-between border-b px-4 py-2">
+            <p className="text-sm font-medium text-muted-foreground">
+              Ledger Entries ({lines?.length ?? 0})
+            </p>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-auto overscroll-contain border-t">
+          <div className="min-h-0 flex-1 overflow-auto overscroll-contain">
             {isLoading ? (
               <div className="flex items-center justify-center py-16">
                 <Spinner />
@@ -187,7 +182,11 @@ export function CashAccountTransactionsSheet({
                       {headerGroup.headers.map((header, index) => (
                         <TableHead
                           key={header.id}
-                          className={index === 0 ? 'pl-4 text-muted-foreground' : 'text-muted-foreground'}
+                          className={
+                            index === 0
+                              ? 'pl-4 text-muted-foreground'
+                              : 'text-muted-foreground'
+                          }
                         >
                           {header.isPlaceholder
                             ? null
@@ -202,10 +201,13 @@ export function CashAccountTransactionsSheet({
                 </TableHeader>
                 <TableBody>
                   {rows.length > 0 ? (
-                      rows.map((row) => (
+                    rows.map((row) => (
                       <TableRow key={row.id}>
                         {row.getVisibleCells().map((cell, index) => (
-                          <TableCell key={cell.id} className={index === 0 ? 'pl-4' : undefined}>
+                          <TableCell
+                            key={cell.id}
+                            className={index === 0 ? 'pl-4' : undefined}
+                          >
                             {flexRender(
                               cell.column.columnDef.cell,
                               cell.getContext()
@@ -220,7 +222,7 @@ export function CashAccountTransactionsSheet({
                         colSpan={columns.length}
                         className="h-24 text-center text-muted-foreground"
                       >
-                        No transactions{dateRange ? ' in this date range' : ' yet'}.
+                        No journal entries for this account yet.
                       </TableCell>
                     </TableRow>
                   )}

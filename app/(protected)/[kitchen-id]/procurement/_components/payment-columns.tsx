@@ -7,17 +7,16 @@ import type { ColumnConfig } from '@/lib/types/data-table'
 export interface SupplierPayment {
   id: string
   kitchen_id: string
-  purchase_id: string
+  reference_purchase_id: string | null
   supplier_id: string
   amount: string | number
-  cash_account_id: string
-  cash_transaction_id: string
-  outstanding_balance: string | number
+  settlement_account_id: string | null
+  journal_entry_id: string | null
   paid_by: string
   created_at: string
   suppliers: { id: string; name: string } | null
   purchases: { id: string; purchase_number: number } | null
-  cash_accounts: { id: string; name: string } | null
+  settlement_account: { id: string; code: string; name: string } | null
   paid_member: { id: string; profiles: { full_name: string } | null } | null
 }
 
@@ -59,9 +58,13 @@ export function getPaymentColumns(): ColumnDef<SupplierPayment>[] {
       enableSorting: true,
     },
     {
-      id: 'cash_account',
-      header: 'Cash account',
-      cell: ({ row }) => row.original.cash_accounts?.name ?? '—',
+      id: 'settlement_account',
+      header: 'Account',
+      cell: ({ row }) => {
+        const acct = row.original.settlement_account
+        if (!acct) return '—'
+        return `${acct.code} · ${acct.name}`
+      },
       enableSorting: false,
     },
     {

@@ -9,7 +9,7 @@ import {
   Van,
   ClipboardCheck,
   Receipt,
-  WalletCards,
+  Scale,
   Users,
   Calculator,
 } from "lucide-react"
@@ -73,13 +73,13 @@ const NAV_ITEMS = [
     permission: "expenses.read",
   },
   {
-    title: "Cash",
-    segment: "cash",
-    icon: WalletCards,
-    permission: "cash_accounts.read",
+    title: "Finance",
+    segment: "finance",
+    icon: Calculator,
+    permission: "accounting.read",
   },
   {
-    title: "Staff",
+    title: "Staff & Scheduling",
     segment: "staff",
     icon: Users,
     permission: "staff.read",
@@ -87,7 +87,7 @@ const NAV_ITEMS = [
   {
     title: "Reconciliation",
     segment: "reconciliation",
-    icon: Calculator,
+    icon: Scale,
     permission: "reconciliation.read",
   },
 ] as const

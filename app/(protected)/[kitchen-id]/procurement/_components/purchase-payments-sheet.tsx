@@ -91,11 +91,10 @@ export function PurchasePaymentsSheet({
       try {
         const result = await createSupplierPayment({
           kitchen_id: kitchen.id,
-          purchase_id: purchase.id,
+          reference_purchase_id: purchase.id,
           supplier_id: purchase.supplier_id,
           amount: amt,
-          cash_account_id: cashAccountId,
-          paid_by: membership.id,
+          settlement_account_id: cashAccountId,
         })
         if (result instanceof Error) return setError(result.message)
         setAmount('')
@@ -151,7 +150,11 @@ export function PurchasePaymentsSheet({
                       <TableCell className="pl-4 font-medium">
                         {formatAmount(payment.amount)}
                       </TableCell>
-                      <TableCell>{payment.cash_accounts?.name ?? '—'}</TableCell>
+                      <TableCell>
+                        {payment.settlement_account
+                          ? `${payment.settlement_account.code} · ${payment.settlement_account.name}`
+                          : '—'}
+                      </TableCell>
                       <TableCell>
                         {payment.paid_member?.profiles?.full_name ?? '—'}
                       </TableCell>
@@ -196,7 +199,7 @@ export function PurchasePaymentsSheet({
                     <SelectContent>
                       {(cashAccounts ?? []).map((acc) => (
                         <SelectItem key={acc.id} value={acc.id}>
-                          {acc.name}
+                          {acc.code} · {acc.name}
                         </SelectItem>
                       ))}
                     </SelectContent>

@@ -13,6 +13,7 @@ export interface InventoryItemPick {
 
 export interface CashAccountPick {
   id: string
+  code: string
   name: string
   is_active: boolean
 }
@@ -30,9 +31,8 @@ export interface PurchaseItemRow {
 export interface SupplierPaymentRow {
   id: string
   amount: string | number
-  outstanding_balance: string | number
   created_at: string
-  cash_accounts: { id: string; name: string } | null
+  settlement_account: { id: string; code: string; name: string } | null
   paid_member: { id: string; profiles: { full_name: string } | null } | null
 }
 
@@ -109,11 +109,12 @@ export async function fetchActiveInventoryItems(kitchenId: string): Promise<Inve
 export async function fetchActiveCashAccounts(kitchenId: string): Promise<CashAccountPick[]> {
   const supabase = createClient()
   const { data, error } = await supabase
-    .from('cash_accounts')
-    .select('id, name, is_active')
+    .from('chart_of_accounts')
+    .select('id, code, name, is_active')
     .eq('kitchen_id', kitchenId)
     .eq('is_active', true)
-    .order('name')
+    .eq('account_type', 'asset')
+    .order('code')
   if (error) throw new Error(error.message)
   return (data ?? []) as CashAccountPick[]
 }
@@ -133,8 +134,8 @@ export async function fetchPurchasePayments(purchaseId: string): Promise<Supplie
   const supabase = createClient()
   const { data, error } = await supabase
     .from('supplier_payments')
-    .select('id, amount, outstanding_balance, created_at, cash_accounts!cash_account_id(id, name), paid_member:kitchen_members!paid_by(id, profiles(full_name))')
-    .eq('purchase_id', purchaseId)
+    .select('id, amount, created_at, settlement_account:chart_of_accounts!settlement_account_id(id, code, name), paid_member:kitchen_members!paid_by(id, profiles(full_name))')
+    .eq('reference_purchase_id', purchaseId)
     .order('created_at', { ascending: false })
   if (error) throw new Error(error.message)
   return (data ?? []) as unknown as SupplierPaymentRow[]

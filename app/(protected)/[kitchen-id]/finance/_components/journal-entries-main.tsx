@@ -2,14 +2,17 @@
 
 import type { Table } from '@tanstack/react-table'
 import { DataTable } from '@/components/data-table/data-table'
-import type { CashTransaction } from './cash-transaction-columns'
+import type { JournalEntry } from './journal-entry-columns'
 
-interface CashTransactionsMainProps {
-  table: Table<CashTransaction>
+interface JournalEntriesMainProps {
+  table: Table<JournalEntry>
   isFetching: boolean
 }
 
-export function CashTransactionsMain({ table, isFetching }: CashTransactionsMainProps) {
+export function JournalEntriesMain({
+  table,
+  isFetching,
+}: JournalEntriesMainProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <DataTable table={table} isFetching={isFetching} />

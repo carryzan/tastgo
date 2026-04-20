@@ -1,10 +1,11 @@
 'use client'
 
 import { useEffect, useState, useTransition } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
-import { updateCashAccount } from '../_lib/cash-account-actions'
-import { CASH_ACCOUNTS_QUERY_KEY } from '../_lib/queries'
-import type { CashAccount } from './cash-account-columns'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { updateChartAccount } from '../_lib/chart-account-actions'
+import { CHART_ACCOUNTS_QUERY_KEY } from '../_lib/queries'
+import { fetchChartAccountsForPicker } from '../_lib/client-queries'
+import type { ChartAccount } from './cash-account-columns'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
@@ -19,14 +20,22 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
   Field,
+  FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
 } from '@/components/ui/field'
 
 interface EditCashAccountDialogProps {
-  account: CashAccount
+  account: ChartAccount
   open: boolean
   onOpenChange: (open: boolean) => void
 }
@@ -36,16 +45,35 @@ export function EditCashAccountDialog({
   open,
   onOpenChange,
 }: EditCashAccountDialogProps) {
+  const NONE = '__none'
   const queryClient = useQueryClient()
   const [isActive, setIsActive] = useState(account.is_active)
+  const [parentId, setParentId] = useState<string>(
+    account.parent_account_id ?? NONE
+  )
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
+
+  const isSystem = account.is_system
+
+  const { data: allAccounts } = useQuery({
+    queryKey: ['chart-accounts-picker', account.kitchen_id],
+    queryFn: () => fetchChartAccountsForPicker(account.kitchen_id),
+    enabled: open && !isSystem,
+  })
+
+  const parentOptions =
+    allAccounts?.filter(
+      (a) =>
+        a.account_type === account.account_type && a.id !== account.id
+    ) ?? []
 
   useEffect(() => {
     if (!open) return
     setIsActive(account.is_active)
+    setParentId(account.parent_account_id ?? NONE)
     setError(null)
-  }, [open, account.id, account.is_active])
+  }, [open, account.id, account.is_active, account.parent_account_id])
 
   function handleOpenChange(next: boolean) {
     if (pending) return
@@ -62,8 +90,12 @@ export function EditCashAccountDialog({
     const name = (fd.get('name') as string)?.trim()
     if (!name) return
 
-    const updates: { name?: string; is_active?: boolean } = {}
+    const updates: { name?: string; parent_account_id?: string | null; is_active?: boolean } = {}
+
     if (name !== account.name) updates.name = name
+    if (!isSystem && parentId !== (account.parent_account_id ?? NONE)) {
+      updates.parent_account_id = parentId === NONE ? null : parentId
+    }
     if (isActive !== account.is_active) updates.is_active = isActive
 
     if (Object.keys(updates).length === 0) {
@@ -73,7 +105,7 @@ export function EditCashAccountDialog({
 
     startTransition(async () => {
       try {
-        const result = await updateCashAccount(
+        const result = await updateChartAccount(
           account.kitchen_id,
           account.id,
           updates
@@ -81,7 +113,10 @@ export function EditCashAccountDialog({
         if (result instanceof Error) return setError(result.message)
 
         onOpenChange(false)
-        queryClient.invalidateQueries({ queryKey: CASH_ACCOUNTS_QUERY_KEY })
+        queryClient.invalidateQueries({ queryKey: CHART_ACCOUNTS_QUERY_KEY })
+        queryClient.invalidateQueries({
+          queryKey: ['chart-accounts-picker', account.kitchen_id],
+        })
       } catch {
         setError('Something went wrong. Please try again.')
       }
@@ -99,11 +134,30 @@ export function EditCashAccountDialog({
         }}
       >
         <DialogHeader>
-          <DialogTitle>Edit cash account</DialogTitle>
-          <DialogDescription>Update details for this cash account.</DialogDescription>
+          <DialogTitle>Edit account</DialogTitle>
+          <DialogDescription>
+            {isSystem
+              ? 'System accounts have limited editability — only name and active status can be changed.'
+              : 'Update details for this account.'}
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor="edit-ca-code">Code</FieldLabel>
+              <Input
+                id="edit-ca-code"
+                value={account.code}
+                readOnly
+                disabled
+                className="text-muted-foreground"
+              />
+              {isSystem && (
+                <FieldDescription>
+                  Code cannot be changed on system accounts.
+                </FieldDescription>
+              )}
+            </Field>
             <Field>
               <FieldLabel htmlFor="edit-ca-name">Name</FieldLabel>
               <Input
@@ -114,6 +168,28 @@ export function EditCashAccountDialog({
                 disabled={pending}
               />
             </Field>
+            {!isSystem && (
+              <Field>
+                <FieldLabel>Parent Account (optional)</FieldLabel>
+                <Select
+                  value={parentId}
+                  onValueChange={setParentId}
+                  disabled={pending}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="None (top-level)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE}>None (top-level)</SelectItem>
+                    {parentOptions.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.code} · {a.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            )}
             <Field>
               <div className="flex items-center justify-between">
                 <FieldLabel htmlFor="edit-ca-active">Active</FieldLabel>
