@@ -1,10 +1,16 @@
 'use client'
 
-import { useEffect, useState, useTransition } from 'react'
+import { useState, useTransition } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useKitchen } from '@/hooks/use-kitchen'
 import { reassignPurchaseSupplier } from '../_lib/purchase-actions'
-import { PURCHASES_QUERY_KEY } from '../_lib/queries'
+import {
+  CREDIT_NOTES_QUERY_KEY,
+  PAYMENTS_QUERY_KEY,
+  PURCHASES_QUERY_KEY,
+  RETURNS_QUERY_KEY,
+  SUPPLIERS_QUERY_KEY,
+} from '../_lib/queries'
 import { fetchAllSuppliers } from '../_lib/client-queries'
 import type { Purchase } from './purchase-columns'
 import { Button } from '@/components/ui/button'
@@ -52,13 +58,17 @@ export function ReassignPurchaseDialog({
     enabled: open,
   })
 
-  useEffect(() => {
-    if (!open) {
-      setToSupplierId('')
-      setReason('')
-      setError(null)
-    }
-  }, [open])
+  function resetForm() {
+    setToSupplierId('')
+    setReason('')
+    setError(null)
+  }
+
+  function handleOpenChange(nextOpen: boolean) {
+    if (pending) return
+    if (!nextOpen) resetForm()
+    onOpenChange(nextOpen)
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -72,8 +82,13 @@ export function ReassignPurchaseDialog({
       try {
         const res = await reassignPurchaseSupplier(kitchen.id, purchase.id, toSupplierId, reason)
         if (res instanceof Error) return setError(res.message)
+        resetForm()
         onOpenChange(false)
         queryClient.invalidateQueries({ queryKey: PURCHASES_QUERY_KEY })
+        queryClient.invalidateQueries({ queryKey: RETURNS_QUERY_KEY })
+        queryClient.invalidateQueries({ queryKey: CREDIT_NOTES_QUERY_KEY })
+        queryClient.invalidateQueries({ queryKey: PAYMENTS_QUERY_KEY })
+        queryClient.invalidateQueries({ queryKey: SUPPLIERS_QUERY_KEY })
       } catch {
         setError('Something went wrong. Please try again.')
       }
@@ -83,13 +98,13 @@ export function ReassignPurchaseDialog({
   const availableSuppliers = (suppliers ?? []).filter((s) => s.id !== purchase.supplier_id)
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!pending) onOpenChange(o) }}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Reassign supplier</DialogTitle>
           <DialogDescription>
             Reassign purchase #{purchase.purchase_number} from{' '}
-            {purchase.suppliers?.name ?? 'current supplier'} to a different supplier. An offsetting ledger entry will be created.
+            {purchase.suppliers?.name ?? 'current supplier'} to a different supplier. Related purchase records and supplier balances will be moved where possible, and shared settlements will block the reassignment until they are cleaned up.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
