@@ -57,18 +57,14 @@ function getAllocationSummary(payment: SupplierPayment) {
   const unallocatedAmount = Math.max(paymentAmount - allocatedAmount, 0)
 
   if (activeAllocations.length === 0) {
-    return { label: 'Unallocated', variant: 'outline' as const, unallocatedAmount }
+    return { label: 'Unallocated', variant: 'outline' as const }
   }
 
   if (unallocatedAmount <= 0.001) {
-    return { label: 'Fully allocated', variant: 'default' as const, unallocatedAmount: 0 }
+    return { label: 'Fully allocated', variant: 'default' as const }
   }
 
-  return {
-    label: 'Partially allocated',
-    variant: 'secondary' as const,
-    unallocatedAmount,
-  }
+  return { label: 'Partially allocated', variant: 'secondary' as const }
 }
 
 export function getPaymentColumns(callbacks?: {
@@ -118,16 +114,7 @@ export function getPaymentColumns(callbacks?: {
       header: 'Allocation',
       cell: ({ row }) => {
         const summary = getAllocationSummary(row.original)
-        return (
-          <div className="flex flex-col gap-1">
-            <Badge variant={summary.variant}>{summary.label}</Badge>
-            {summary.unallocatedAmount > 0.001 && (
-              <span className="text-xs text-muted-foreground">
-                {formatAmount(summary.unallocatedAmount)} remaining
-              </span>
-            )}
-          </div>
-        )
+        return <Badge variant={summary.variant}>{summary.label}</Badge>
       },
       enableSorting: false,
     },
