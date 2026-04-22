@@ -67,7 +67,7 @@ export function AddReturnSheet({
   prefilledPurchaseId,
   prefilledSupplierId,
 }: AddReturnSheetProps) {
-  const { kitchen, membership } = useKitchen()
+  const { kitchen } = useKitchen()
   const queryClient = useQueryClient()
 
   const [supplierId, setSupplierId] = useState(prefilledSupplierId ?? '')
@@ -166,7 +166,6 @@ export function AddReturnSheet({
           kitchen_id: kitchen.id,
           purchase_id: purchaseId,
           supplier_id: supplierId,
-          created_by: membership.id as string,
           items: activeReturnItems.map((item) => ({
             inventory_item_id: item.inventory_item_id,
             batch_id: item.batch_id,

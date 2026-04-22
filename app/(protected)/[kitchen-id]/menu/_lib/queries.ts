@@ -8,9 +8,12 @@ export const MENU_ITEMS_SELECT =
 export const MODIFIER_GROUPS_QUERY_KEY = ['modifier-groups']
 export const MODIFIER_GROUPS_FROM = 'modifier_groups'
 export const MODIFIER_GROUPS_SELECT =
-  '*, brands!brand_id(id, name), modifier_options(id)'
+  '*, brands!brand_id(id, name), modifier_options(id, is_active)'
 
 export const COMBOS_QUERY_KEY = ['combos']
 export const COMBOS_FROM = 'combos'
+// quantity is required by the DB (numeric(10,3) NOT NULL DEFAULT 1 CHECK > 0).
+// menu_items.price is embedded so manage-combo-items-sheet can compute the total
+// for discounted-price validation without an extra round-trip.
 export const COMBOS_SELECT =
-  '*, brands!brand_id(id, name), combo_items(id, sort_order, menu_item_id, menu_items!menu_item_id(id, name))'
+  '*, brands!brand_id(id, name), combo_items(id, sort_order, quantity, menu_item_id, menu_items!menu_item_id(id, name, price))'

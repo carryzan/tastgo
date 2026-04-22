@@ -23,8 +23,9 @@ export interface Combo {
   combo_items: {
     id: string
     sort_order: number
+    quantity: number | string
     menu_item_id: string
-    menu_items: { id: string; name: string } | null
+    menu_items: { id: string; name: string; price: number | string } | null
   }[]
 }
 

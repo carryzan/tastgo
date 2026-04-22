@@ -28,8 +28,9 @@ export function DataTableRowActions<TData>({
   extraItems,
 }: DataTableRowActionsProps<TData>) {
   const { canEdit, canDelete } = permissions
+  const extraContent = extraItems?.(row)
 
-  if (!canEdit && !canDelete) return null
+  if (!canEdit && !canDelete && !extraContent) return null
 
   return (
     <DropdownMenu>
@@ -49,7 +50,7 @@ export function DataTableRowActions<TData>({
             Edit
           </DropdownMenuItem>
         )}
-        {extraItems?.(row)}
+        {extraContent}
         {canDelete && (
           <DropdownMenuItem
             variant="destructive"
@@ -63,4 +64,3 @@ export function DataTableRowActions<TData>({
     </DropdownMenu>
   )
 }
-

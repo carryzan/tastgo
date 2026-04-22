@@ -48,7 +48,7 @@ export function ReceivePurchaseSheet({
   open,
   onOpenChange,
 }: ReceivePurchaseSheetProps) {
-  const { kitchen, membership } = useKitchen()
+  const { kitchen } = useKitchen()
   const queryClient = useQueryClient()
   const [receiveItems, setReceiveItems] = useState<ReceiveItemState[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -107,7 +107,6 @@ export function ReceivePurchaseSheet({
         const result = await receivePurchase(
           kitchen.id,
           purchase.id,
-          membership.id as string,
           receiveItems.map((item) => ({
             purchase_item_id: item.purchase_item_id,
             received_quantity: Number(item.received_quantity),

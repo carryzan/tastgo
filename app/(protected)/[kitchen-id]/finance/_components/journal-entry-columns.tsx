@@ -4,15 +4,9 @@ import type { ReactNode } from 'react'
 import type { ColumnDef, Row } from '@tanstack/react-table'
 import { FileTextIcon, RotateCcwIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { MoreHorizontalIcon } from 'lucide-react'
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { getSelectColumn } from '@/components/data-table/data-table-select-column'
+import { DataTableRowActions } from '@/components/data-table/data-table-row-actions'
 import type { ColumnConfig } from '@/lib/types/data-table'
 
 export interface JournalEntry {
@@ -113,7 +107,7 @@ export function getJournalEntryColumns(callbacks: {
   onReverse: (row: Row<JournalEntry>) => void
   canReverse: boolean
 }): ColumnDef<JournalEntry>[] {
-  const renderRowEnd = (row: Row<JournalEntry>): ReactNode => {
+  const extraItems = (row: Row<JournalEntry>): ReactNode => {
     const canReverse =
       callbacks.canReverse &&
       row.original.status === 'posted' &&
@@ -121,37 +115,36 @@ export function getJournalEntryColumns(callbacks: {
       !row.original.reversal_of_id
 
     return (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon-xs">
-            <MoreHorizontalIcon />
-            <span className="sr-only">Open menu</span>
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          className="w-max"
-          onCloseAutoFocus={(event) => event.preventDefault()}
-        >
-          <DropdownMenuItem onClick={() => callbacks.onViewDetails(row)}>
-            <FileTextIcon />
-            View Lines
+      <>
+        <DropdownMenuItem onClick={() => callbacks.onViewDetails(row)}>
+          <FileTextIcon />
+          View Lines
+        </DropdownMenuItem>
+        {canReverse && (
+          <DropdownMenuItem
+            onClick={() => callbacks.onReverse(row)}
+            className="text-destructive focus:text-destructive"
+          >
+            <RotateCcwIcon />
+            Reverse
           </DropdownMenuItem>
-          {canReverse && (
-            <DropdownMenuItem
-              onClick={() => callbacks.onReverse(row)}
-              className="text-destructive focus:text-destructive"
-            >
-              <RotateCcwIcon />
-              Reverse
-            </DropdownMenuItem>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
+        )}
+      </>
     )
   }
 
   return [
-    getSelectColumn<JournalEntry>({ renderRowEnd }),
+    getSelectColumn<JournalEntry>({
+      renderRowEnd: (row) => (
+        <DataTableRowActions
+          row={row}
+          permissions={{ canEdit: false, canDelete: false }}
+          onEdit={() => {}}
+          onDelete={() => {}}
+          extraItems={extraItems}
+        />
+      ),
+    }),
     {
       accessorKey: 'journal_number',
       header: 'Journal #',

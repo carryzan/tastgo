@@ -66,7 +66,7 @@ export function AddVersionSheet({
   open,
   onOpenChange,
 }: AddVersionSheetProps) {
-  const { kitchen, membership, unitsOfMeasure } = useKitchen()
+  const { kitchen, unitsOfMeasure } = useKitchen()
   const uoms = unitsOfMeasure as UOM[]
   const queryClient = useQueryClient()
 
@@ -144,16 +144,11 @@ export function AddVersionSheet({
         const result = await createRecipeVersion({
           kitchen_id: kitchen.id,
           production_recipe_id: recipe.id,
-          created_by: (membership as unknown as { id: string }).id,
-          components: builtComponents.map((c) => {
-            const qty = parseFloat(c.recipe_quantity)
-            return {
-              inventory_item_id: c.inventory_item_id,
-              recipe_quantity: qty,
-              yield_adjusted_quantity: qty,
-              uom_id: c.uom_id,
-            }
-          }),
+          components: builtComponents.map((c) => ({
+            inventory_item_id: c.inventory_item_id,
+            recipe_quantity: parseFloat(c.recipe_quantity),
+            uom_id: c.uom_id,
+          })),
         })
 
         if (result instanceof Error) return setError(result.message)

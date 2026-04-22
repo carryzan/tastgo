@@ -25,6 +25,7 @@ export async function updateServicePeriod(
     .from('production_service_periods')
     .update(updates)
     .eq('id', id)
+    .eq('kitchen_id', kitchenId)
 
   if (error) return new Error(error.message)
   revalidatePath(`/${kitchenId}/production`)
@@ -36,6 +37,7 @@ export async function deleteServicePeriod(id: string, kitchenId: string) {
     .from('production_service_periods')
     .delete()
     .eq('id', id)
+    .eq('kitchen_id', kitchenId)
 
   if (error) return new Error(error.message)
   revalidatePath(`/${kitchenId}/production`)

@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useMemo, useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { updateMenu } from '../_lib/menu-actions'
+import { mapMenuDbError } from '../_lib/db-errors'
 import type { Menu } from '../_lib/menus'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
@@ -46,13 +47,6 @@ export function EditMenu({
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
   const [isActive, setIsActive] = useState(menu.is_active)
-
-  useEffect(() => {
-    if (open) {
-      setBrandId(menu.brand_id)
-      setIsActive(menu.is_active)
-    }
-  }, [open, menu.id, menu.brand_id, menu.is_active])
 
   const menusForDuplicateCheck = useMemo(
     () => menus.filter((m) => m.brand_id === brandId),
@@ -98,7 +92,7 @@ export function EditMenu({
         if (brandId !== menu.brand_id) updates.brand_id = brandId
 
         const result = await updateMenu(menu.id, kitchenId, updates)
-        if (result instanceof Error) return setError(result.message)
+        if (result instanceof Error) return setError(mapMenuDbError(result))
         onOpenChange(false)
         router.refresh()
       } catch {

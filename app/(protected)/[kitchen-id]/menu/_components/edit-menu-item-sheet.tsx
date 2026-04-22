@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useMemo, useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useKitchen } from '@/hooks/use-kitchen'
 import { useKitchenUpload } from '@/hooks/use-kitchen-upload'
 import { updateMenuItem } from '../_lib/menu-item-actions'
 import { MENU_ITEMS_QUERY_KEY } from '../_lib/queries'
+import { mapMenuDbError } from '../_lib/db-errors'
 import type { MenuItem } from './menu-item-columns'
 import type { Menu } from '../_lib/menus'
 import { MenuBrandField, useMenuBrandOptions } from './menu-brand-field'
@@ -38,6 +39,11 @@ import {
   ComboboxItem,
   ComboboxList,
 } from '@/components/ui/combobox'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 
 interface EditMenuItemSheetProps {
   item: MenuItem
@@ -80,16 +86,6 @@ export function EditMenuItemSheet({
     for (const m of selectableMenus) map.set(m.id, m.name)
     return map
   }, [selectableMenus])
-
-  useEffect(() => {
-    if (!open) return
-    setBrandId(item.brand_id)
-    setMenuId(item.menu_id)
-    setIsActive(item.is_active)
-    setFile(null)
-    setRemoveImage(false)
-    setError(null)
-  }, [open, item.id, item.menu_id, item.is_active, item.brand_id])
 
   function handleOpenChange(next: boolean) {
     if (pending) return
@@ -150,7 +146,7 @@ export function EditMenuItemSheet({
 
         if (Object.keys(updates).length > 0) {
           const u = await updateMenuItem(item.id, kitchen.id, updates)
-          if (u instanceof Error) return setError(u.message)
+          if (u instanceof Error) return setError(mapMenuDbError(u))
         }
 
         onOpenChange(false)
@@ -265,11 +261,30 @@ export function EditMenuItemSheet({
               <Field>
                 <div className="flex items-center justify-between">
                   <FieldLabel htmlFor="edit-mi-active">Active</FieldLabel>
-                  <Switch
-                    id="edit-mi-active"
-                    checked={isActive}
-                    onCheckedChange={setIsActive}
-                  />
+                  {!item.current_recipe_version_id && !isActive ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span>
+                          <Switch
+                            id="edit-mi-active"
+                            checked={isActive}
+                            onCheckedChange={setIsActive}
+                            disabled
+                            aria-disabled
+                          />
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        Create a recipe version first to activate this item.
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : (
+                    <Switch
+                      id="edit-mi-active"
+                      checked={isActive}
+                      onCheckedChange={setIsActive}
+                    />
+                  )}
                 </div>
               </Field>
             </FieldGroup>

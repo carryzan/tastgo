@@ -30,13 +30,13 @@ export function Supplier() {
   const { kitchenSettings, updateSettings } = useKitchen()
 
   const completed =
-    kitchenSettings && typeof kitchenSettings.balance_completed === "boolean"
-      ? kitchenSettings.balance_completed
+    kitchenSettings && typeof kitchenSettings.opening_supplier_completed === "boolean"
+      ? kitchenSettings.opening_supplier_completed
       : false
 
   const balanceDate =
-    kitchenSettings && typeof kitchenSettings.balance_date === "string"
-      ? new Date(kitchenSettings.balance_date)
+    kitchenSettings && typeof kitchenSettings.opening_supplier_date === "string"
+      ? new Date(kitchenSettings.opening_supplier_date)
       : undefined
 
   return (
@@ -59,7 +59,7 @@ export function Supplier() {
           <Switch
             checked={completed}
             onCheckedChange={(value) =>
-              updateSettings({ balance_completed: value })
+              updateSettings({ opening_supplier_completed: value })
             }
           />
         </ItemActions>
@@ -87,7 +87,7 @@ export function Supplier() {
                 selected={balanceDate}
                 onSelect={(date) =>
                   updateSettings({
-                    balance_date: date ? date.toISOString() : null,
+                    opening_supplier_date: date ? date.toISOString() : null,
                   })
                 }
               />

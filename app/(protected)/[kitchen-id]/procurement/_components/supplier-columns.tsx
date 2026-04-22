@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react'
 import type { ColumnDef, Row } from '@tanstack/react-table'
-import { HistoryIcon } from 'lucide-react'
+import { FileTextIcon, HistoryIcon } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { getSelectColumn } from '@/components/data-table/data-table-select-column'
 import { DataTableRowActions } from '@/components/data-table/data-table-row-actions'
@@ -34,16 +34,23 @@ export function getSupplierColumns(
   callbacks: {
     onEdit: (row: Row<Supplier>) => void
     onDelete: (row: Row<Supplier>) => void
+    onLedger: (row: Row<Supplier>) => void
     onPriceHistory: (row: Row<Supplier>) => void
   }
 ): ColumnDef<Supplier>[] {
   const showRowActions = Boolean(permissions.canEdit || permissions.canDelete)
 
   const extraItems = (row: Row<Supplier>): ReactNode => (
-    <DropdownMenuItem onClick={() => callbacks.onPriceHistory(row)}>
-      <HistoryIcon />
-      Price History
-    </DropdownMenuItem>
+    <>
+      <DropdownMenuItem onClick={() => callbacks.onLedger(row)}>
+        <FileTextIcon />
+        Ledger
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={() => callbacks.onPriceHistory(row)}>
+        <HistoryIcon />
+        Price History
+      </DropdownMenuItem>
+    </>
   )
 
   return [

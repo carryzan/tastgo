@@ -63,14 +63,19 @@ import { ReturnsMain } from './returns-main'
 import { CreditNotesMain } from './credit-notes-main'
 import { AddSupplierSheet } from './add-supplier-sheet'
 import { EditSupplierSheet } from './edit-supplier-sheet'
+import { SupplierLedgerSheet } from './supplier-ledger-sheet'
 import { SupplierPriceHistorySheet } from './supplier-price-history-sheet'
 import { AddPurchaseSheet } from './add-purchase-sheet'
+import { AddPaymentSheet } from './add-payment-sheet'
+import { AddCreditSheet } from './add-credit-sheet'
 import { EditPurchaseSheet } from './edit-purchase-sheet'
 import { ReceivePurchaseSheet } from './receive-purchase-sheet'
 import { PurchasePaymentsSheet } from './purchase-payments-sheet'
 import { AddReturnSheet } from './add-return-sheet'
 import { ReturnDetailSheet } from './return-detail-sheet'
-import { ApplyCreditNoteDialog } from './apply-credit-note-dialog'
+import { CreditNoteDetailSheet } from './credit-note-detail-sheet'
+import { PaymentDetailSheet } from './payment-detail-sheet'
+import { ReassignPurchaseDialog } from './reassign-purchase-dialog'
 
 export function ProcurementMain() {
   const { kitchen } = useKitchen()
@@ -81,6 +86,7 @@ export function ProcurementMain() {
   // Supplier state
   const [addSupplierOpen, setAddSupplierOpen] = useState(false)
   const [editSupplier, setEditSupplier] = useState<Supplier | null>(null)
+  const [ledgerSupplier, setLedgerSupplier] = useState<Supplier | null>(null)
   const [deleteSupplierTarget, setDeleteSupplierTarget] = useState<Supplier | null>(null)
   const [priceHistorySupplier, setPriceHistorySupplier] = useState<Supplier | null>(null)
 
@@ -96,7 +102,15 @@ export function ProcurementMain() {
   const [detailReturn, setDetailReturn] = useState<SupplierReturn | null>(null)
 
   // Credit note state
-  const [applyCreditNote, setApplyCreditNote] = useState<SupplierCreditNote | null>(null)
+  const [addCreditOpen, setAddCreditOpen] = useState(false)
+  const [detailCreditNote, setDetailCreditNote] = useState<SupplierCreditNote | null>(null)
+
+  // Payment state
+  const [addPaymentOpen, setAddPaymentOpen] = useState(false)
+  const [detailPayment, setDetailPayment] = useState<SupplierPayment | null>(null)
+
+  // Reassign purchase state
+  const [reassignPurchase, setReassignPurchase] = useState<Purchase | null>(null)
 
   const supplierPermissions = useMemo<Permission>(
     () => ({ canEdit: true, canDelete: true }),
@@ -110,6 +124,9 @@ export function ProcurementMain() {
   const handleDeleteSupplier = useCallback((row: Row<Supplier>) => {
     setDeleteSupplierTarget(row.original)
   }, [])
+  const handleLedgerSupplier = useCallback((row: Row<Supplier>) => {
+    setLedgerSupplier(row.original)
+  }, [])
   const handlePriceHistory = useCallback((row: Row<Supplier>) => {
     setPriceHistorySupplier(row.original)
   }, [])
@@ -119,9 +136,10 @@ export function ProcurementMain() {
       getSupplierColumns(supplierPermissions, {
         onEdit: handleEditSupplier,
         onDelete: handleDeleteSupplier,
+        onLedger: handleLedgerSupplier,
         onPriceHistory: handlePriceHistory,
       }),
-    [supplierPermissions, handleEditSupplier, handleDeleteSupplier, handlePriceHistory]
+    [supplierPermissions, handleEditSupplier, handleDeleteSupplier, handleLedgerSupplier, handlePriceHistory]
   )
 
   const {
@@ -158,6 +176,9 @@ export function ProcurementMain() {
   const handleCreateReturn = useCallback((row: Row<Purchase>) => {
     setReturnPurchase(row.original)
   }, [])
+  const handleReassign = useCallback((row: Row<Purchase>) => {
+    setReassignPurchase(row.original)
+  }, [])
 
   const purchaseColumns = useMemo(
     () =>
@@ -167,8 +188,9 @@ export function ProcurementMain() {
         onReceive: handleReceive,
         onPayments: handlePayments,
         onCreateReturn: handleCreateReturn,
+        onReassign: handleReassign,
       }),
-    [supplierPermissions, handleEditPurchase, handleMarkSent, handleReceive, handlePayments, handleCreateReturn]
+    [supplierPermissions, handleEditPurchase, handleMarkSent, handleReceive, handlePayments, handleCreateReturn, handleReassign]
   )
 
   const {
@@ -184,8 +206,15 @@ export function ProcurementMain() {
     kitchenId: kitchen.id,
   })
 
-  // Payment columns (read-only)
-  const paymentColumns = useMemo(() => getPaymentColumns(), [])
+  // Payment callbacks
+  const handleViewPaymentDetail = useCallback((row: Row<SupplierPayment>) => {
+    setDetailPayment(row.original)
+  }, [])
+
+  const paymentColumns = useMemo(
+    () => getPaymentColumns({ onViewDetail: handleViewPaymentDetail }),
+    [handleViewPaymentDetail]
+  )
 
   const {
     table: paymentTable,
@@ -227,16 +256,16 @@ export function ProcurementMain() {
   })
 
   // Credit note callbacks
-  const handleApplyCreditNote = useCallback((row: Row<SupplierCreditNote>) => {
-    setApplyCreditNote(row.original)
+  const handleViewCreditNoteDetail = useCallback((row: Row<SupplierCreditNote>) => {
+    setDetailCreditNote(row.original)
   }, [])
 
   const creditNoteColumns = useMemo(
     () =>
       getCreditNoteColumns({
-        onApply: handleApplyCreditNote,
+        onViewDetail: handleViewCreditNoteDetail,
       }),
-    [handleApplyCreditNote]
+    [handleViewCreditNoteDetail]
   )
 
   const {
@@ -280,6 +309,9 @@ export function ProcurementMain() {
       <ExpandableSearch value={paymentSearch} onChange={setPaymentSearch} />
       <DataTableFilter table={paymentTable} columnConfigs={paymentColumnConfigs} />
       <DataTableSort table={paymentTable} columnConfigs={paymentColumnConfigs} />
+      <Button size="sm" onClick={() => setAddPaymentOpen(true)}>
+        Add Payment
+      </Button>
     </>
   )
 
@@ -299,6 +331,9 @@ export function ProcurementMain() {
       <ExpandableSearch value={creditNoteSearch} onChange={setCreditNoteSearch} />
       <DataTableFilter table={creditNoteTable} columnConfigs={creditNoteColumnConfigs} />
       <DataTableSort table={creditNoteTable} columnConfigs={creditNoteColumnConfigs} />
+      <Button size="sm" onClick={() => setAddCreditOpen(true)}>
+        Add Credit
+      </Button>
     </>
   )
 
@@ -345,6 +380,15 @@ export function ProcurementMain() {
           open
           onOpenChange={(next) => {
             if (!next) setEditSupplier(null)
+          }}
+        />
+      )}
+      {ledgerSupplier && (
+        <SupplierLedgerSheet
+          supplier={ledgerSupplier}
+          open
+          onOpenChange={(next) => {
+            if (!next) setLedgerSupplier(null)
           }}
         />
       )}
@@ -430,13 +474,45 @@ export function ProcurementMain() {
         />
       )}
 
-      {/* Credit note dialog */}
-      {applyCreditNote && (
-        <ApplyCreditNoteDialog
-          creditNote={applyCreditNote}
+      {/* Credit note detail sheet */}
+      {detailCreditNote && (
+        <CreditNoteDetailSheet
+          creditNote={detailCreditNote}
           open
           onOpenChange={(next) => {
-            if (!next) setApplyCreditNote(null)
+            if (!next) setDetailCreditNote(null)
+          }}
+        />
+      )}
+
+      <AddCreditSheet
+        open={addCreditOpen}
+        onOpenChange={setAddCreditOpen}
+      />
+
+      <AddPaymentSheet
+        open={addPaymentOpen}
+        onOpenChange={setAddPaymentOpen}
+      />
+
+      {/* Payment detail sheet */}
+      {detailPayment && (
+        <PaymentDetailSheet
+          payment={detailPayment}
+          open
+          onOpenChange={(next) => {
+            if (!next) setDetailPayment(null)
+          }}
+        />
+      )}
+
+      {/* Reassign purchase dialog */}
+      {reassignPurchase && (
+        <ReassignPurchaseDialog
+          purchase={reassignPurchase}
+          open
+          onOpenChange={(next) => {
+            if (!next) setReassignPurchase(null)
           }}
         />
       )}

@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { createMenu } from '../_lib/menu-actions'
+import { mapMenuDbError } from '../_lib/db-errors'
 import type { Menu } from '../_lib/menus'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
@@ -79,7 +80,7 @@ export function AddMenu({ kitchenId, menus }: AddMenuProps) {
           name,
           sort_order,
         })
-        if (result instanceof Error) return setError(result.message)
+        if (result instanceof Error) return setError(mapMenuDbError(result))
         form.reset()
         setBrandOverride(null)
         setOpen(false)

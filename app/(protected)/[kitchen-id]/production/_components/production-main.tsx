@@ -20,6 +20,8 @@ import { EditRecipeSheet } from './edit-recipe-dialog'
 import { VersionHistorySheet } from './version-history-sheet'
 import { AddVersionSheet } from './add-version-sheet'
 import { CompleteBatchDialog } from './complete-batch-dialog'
+import { ReverseBatchDialog } from './reverse-batch-dialog'
+import { BatchComponentsSheet } from './batch-components-sheet'
 import { DataTableDeleteDialog } from '@/components/data-table/data-table-delete-dialog'
 import {
   getRecipeColumns,
@@ -106,14 +108,26 @@ export function ProductionMain({ initialServicePeriods }: ProductionMainProps) {
 
   // Batch state
   const [completeBatch, setCompleteBatch] = useState<Batch | null>(null)
+  const [reverseBatch, setReverseBatch] = useState<Batch | null>(null)
+  const [batchComponents, setBatchComponents] = useState<Batch | null>(null)
   const [deleteBatch, setDeleteBatch] = useState<Batch | null>(null)
 
   const handleDeleteBatch = useCallback(
-    (row: Row<Batch>) => setDeleteBatch(row.original),
+    (row: Row<Batch>) => {
+      if (row.original.status === 'draft') setDeleteBatch(row.original)
+    },
     []
   )
   const handleCompleteBatch = useCallback(
     (row: Row<Batch>) => setCompleteBatch(row.original),
+    []
+  )
+  const handleReverseBatch = useCallback(
+    (row: Row<Batch>) => setReverseBatch(row.original),
+    []
+  )
+  const handleViewComponents = useCallback(
+    (row: Row<Batch>) => setBatchComponents(row.original),
     []
   )
 
@@ -122,8 +136,10 @@ export function ProductionMain({ initialServicePeriods }: ProductionMainProps) {
       getBatchColumns(permissions, {
         onDelete: handleDeleteBatch,
         onComplete: handleCompleteBatch,
+        onReverse: handleReverseBatch,
+        onViewComponents: handleViewComponents,
       }),
-    [permissions, handleDeleteBatch, handleCompleteBatch]
+    [permissions, handleDeleteBatch, handleCompleteBatch, handleReverseBatch, handleViewComponents]
   )
 
   const {
@@ -243,6 +259,24 @@ export function ProductionMain({ initialServicePeriods }: ProductionMainProps) {
           open={!!completeBatch}
           onOpenChange={(next) => {
             if (!next) setCompleteBatch(null)
+          }}
+        />
+      )}
+      {reverseBatch && (
+        <ReverseBatchDialog
+          batch={reverseBatch}
+          open={!!reverseBatch}
+          onOpenChange={(next) => {
+            if (!next) setReverseBatch(null)
+          }}
+        />
+      )}
+      {batchComponents && (
+        <BatchComponentsSheet
+          batch={batchComponents}
+          open={!!batchComponents}
+          onOpenChange={(next) => {
+            if (!next) setBatchComponents(null)
           }}
         />
       )}

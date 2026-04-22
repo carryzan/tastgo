@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useKitchen } from '@/hooks/use-kitchen'
 import { createMenuItemRecipeVersion } from '../_lib/menu-item-actions'
 import { MENU_ITEMS_QUERY_KEY } from '../_lib/queries'
+import { mapMenuDbError } from '../_lib/db-errors'
 import {
   fetchActiveInventoryItems,
   fetchActiveProductionRecipes,
@@ -70,7 +71,7 @@ export function AddRecipeVersionSheet({
   open,
   onOpenChange,
 }: AddRecipeVersionSheetProps) {
-  const { kitchen, membership, unitsOfMeasure } = useKitchen()
+  const { kitchen, unitsOfMeasure } = useKitchen()
   const uoms = unitsOfMeasure as UOM[]
   const queryClient = useQueryClient()
 
@@ -82,7 +83,6 @@ export function AddRecipeVersionSheet({
 
   useEffect(() => {
     if (!open) return
-    setError(null)
     Promise.all([
       fetchActiveInventoryItems(kitchen.id),
       fetchActiveProductionRecipes(kitchen.id),
@@ -156,6 +156,10 @@ export function AddRecipeVersionSheet({
       return c.production_recipe_id && c.recipe_quantity && c.uom_id
     })
 
+    if (built.length === 0) {
+      return setError('Add at least one component before saving the recipe version.')
+    }
+
     for (const c of built) {
       const qty = Number.parseFloat(c.recipe_quantity)
       if (Number.isNaN(qty) || qty <= 0) {
@@ -163,17 +167,11 @@ export function AddRecipeVersionSheet({
       }
     }
 
-    const memberId = membership.id ? String(membership.id) : ''
-    if (!memberId) {
-      return setError('Could not resolve your kitchen membership.')
-    }
-
     startTransition(async () => {
       try {
         const result = await createMenuItemRecipeVersion({
           kitchen_id: kitchen.id,
           menu_item_id: menuItem.id,
-          created_by: memberId,
           components: built.map((c) => {
             const qty = Number.parseFloat(c.recipe_quantity)
             if (c.component_type === 'inventory_item') {
@@ -193,7 +191,7 @@ export function AddRecipeVersionSheet({
           }),
         })
 
-        if (result instanceof Error) return setError(result.message)
+        if (result instanceof Error) return setError(mapMenuDbError(result))
 
         setComponents([])
         onOpenChange(false)
@@ -203,13 +201,6 @@ export function AddRecipeVersionSheet({
       }
     })
   }
-
-  const nextVersionNumber =
-    menuItem.menu_item_recipe_versions.length > 0
-      ? Math.max(
-          ...menuItem.menu_item_recipe_versions.map((v) => v.version_number)
-        ) + 1
-      : 1
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
@@ -226,7 +217,7 @@ export function AddRecipeVersionSheet({
         <SheetHeader>
           <SheetTitle>New Version — {menuItem.name}</SheetTitle>
           <SheetDescription>
-            Creates version {nextVersionNumber} and sets it as current.
+            Creates a new version and sets it as the current recipe.
           </SheetDescription>
         </SheetHeader>
 

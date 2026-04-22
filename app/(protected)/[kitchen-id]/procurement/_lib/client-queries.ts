@@ -18,22 +18,58 @@ export interface CashAccountPick {
   is_active: boolean
 }
 
+export interface CreditOffsetAccountPick {
+  id: string
+  code: string
+  name: string
+  account_type:
+    | 'asset'
+    | 'expense'
+    | 'revenue'
+    | 'contra_revenue'
+    | 'cost_of_goods_sold'
+  is_active: boolean
+}
+
 export interface PurchaseItemRow {
   id: string
   inventory_item_id: string
   ordered_quantity: string | number
   received_quantity: string | number | null
+  storage_quantity: string | number | null
   unit_cost: string | number
   line_total: string | number
+  batch_id: string | null
   inventory_items: { id: string; name: string } | null
 }
 
-export interface SupplierPaymentRow {
+export interface PurchasePaymentSettlementRow {
   id: string
+  payment_id: string
   amount: string | number
   created_at: string
-  settlement_account: { id: string; code: string; name: string } | null
-  paid_member: { id: string; profiles: { full_name: string } | null } | null
+  payment: {
+    id: string
+    amount: string | number
+    created_at: string
+    reversed_at: string | null
+    settlement_account: { id: string; code: string; name: string } | null
+    paid_member: { id: string; profiles: { full_name: string } | null } | null
+  } | null
+}
+
+export interface PurchaseCreditSettlementRow {
+  id: string
+  credit_note_id: string
+  amount: string | number
+  created_at: string
+  credit_note: {
+    id: string
+    credit_value: string | number
+    status: 'open' | 'partially_settled' | 'settled' | 'reversed'
+    created_at: string
+    reversed_at: string | null
+  } | null
 }
 
 export interface ReturnItemRow {
@@ -69,6 +105,71 @@ export interface ReceivedPurchasePick {
   supplier_invoice_code: string | null
   ordered_total: string | number
   received_at: string | null
+}
+
+export interface SupplierLedgerEntry {
+  id: string
+  kitchen_id: string
+  supplier_id: string
+  entry_type: 'opening_balance' | 'purchase_received' | 'supplier_payment' | 'supplier_credit_note' | 'supplier_credit_refund' | 'manual_adjustment'
+  amount_signed: string | number
+  source_table: string
+  source_id: string
+  purchase_id: string | null
+  created_by: string
+  created_at: string
+}
+
+export interface SupplierCreditAllocation {
+  id: string
+  kitchen_id: string
+  credit_note_id: string
+  purchase_id: string
+  amount: string | number
+  allocated_by: string
+  created_at: string
+  voided_by: string | null
+  voided_at: string | null
+  void_reason: string | null
+  purchases: { id: string; purchase_number: number } | null
+}
+
+export interface SupplierCreditRefund {
+  id: string
+  kitchen_id: string
+  credit_note_id: string
+  amount: string | number
+  refunded_by: string
+  created_at: string
+  reversed_by: string | null
+  reversed_at: string | null
+  reversal_reason: string | null
+  refund_account_id: string | null
+  journal_entry_id: string | null
+  refund_account: { id: string; code: string; name: string } | null
+}
+
+export interface SupplierPaymentAllocation {
+  id: string
+  kitchen_id: string
+  payment_id: string
+  purchase_id: string
+  amount: string | number
+  allocated_by: string
+  created_at: string
+  voided_by: string | null
+  voided_at: string | null
+  void_reason: string | null
+  purchases: { id: string; purchase_number: number } | null
+}
+
+export interface InventoryItemSupplier {
+  id: string
+  inventory_item_id: string
+  supplier_id: string
+  current_unit_cost: string | number
+  is_preferred: boolean
+  is_active: boolean
 }
 
 export async function fetchActiveSuppliers(kitchenId: string): Promise<SupplierPick[]> {
@@ -119,26 +220,58 @@ export async function fetchActiveCashAccounts(kitchenId: string): Promise<CashAc
   return (data ?? []) as CashAccountPick[]
 }
 
+export async function fetchActiveCreditOffsetAccounts(
+  kitchenId: string
+): Promise<CreditOffsetAccountPick[]> {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('chart_of_accounts')
+    .select('id, code, name, account_type, is_active')
+    .eq('kitchen_id', kitchenId)
+    .eq('is_active', true)
+    .in('account_type', ['asset', 'expense', 'revenue', 'contra_revenue', 'cost_of_goods_sold'])
+    .order('code')
+  if (error) throw new Error(error.message)
+  return (data ?? []) as CreditOffsetAccountPick[]
+}
+
 export async function fetchPurchaseItems(purchaseId: string): Promise<PurchaseItemRow[]> {
   const supabase = createClient()
   const { data, error } = await supabase
     .from('purchase_items')
-    .select('id, inventory_item_id, ordered_quantity, received_quantity, unit_cost, line_total, inventory_items!inventory_item_id(id, name)')
+    .select('id, inventory_item_id, ordered_quantity, received_quantity, storage_quantity, unit_cost, line_total, batch_id, inventory_items!inventory_item_id(id, name)')
     .eq('purchase_id', purchaseId)
     .order('created_at', { ascending: true })
   if (error) throw new Error(error.message)
   return (data ?? []) as unknown as PurchaseItemRow[]
 }
 
-export async function fetchPurchasePayments(purchaseId: string): Promise<SupplierPaymentRow[]> {
+export async function fetchPurchasePaymentSettlements(
+  purchaseId: string
+): Promise<PurchasePaymentSettlementRow[]> {
   const supabase = createClient()
   const { data, error } = await supabase
-    .from('supplier_payments')
-    .select('id, amount, created_at, settlement_account:chart_of_accounts!settlement_account_id(id, code, name), paid_member:kitchen_members!paid_by(id, profiles(full_name))')
-    .eq('reference_purchase_id', purchaseId)
+    .from('supplier_payment_allocations')
+    .select('id, payment_id, amount, created_at, payment:supplier_payments!payment_id(id, amount, created_at, reversed_at, settlement_account:chart_of_accounts!settlement_account_id(id, code, name), paid_member:kitchen_members!paid_by(id, profiles(full_name)))')
+    .eq('purchase_id', purchaseId)
+    .is('voided_at', null)
     .order('created_at', { ascending: false })
   if (error) throw new Error(error.message)
-  return (data ?? []) as unknown as SupplierPaymentRow[]
+  return (data ?? []) as unknown as PurchasePaymentSettlementRow[]
+}
+
+export async function fetchPurchaseCreditSettlements(
+  purchaseId: string
+): Promise<PurchaseCreditSettlementRow[]> {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('supplier_credit_allocations')
+    .select('id, credit_note_id, amount, created_at, credit_note:supplier_credit_notes!credit_note_id(id, credit_value, status, created_at, reversed_at)')
+    .eq('purchase_id', purchaseId)
+    .is('voided_at', null)
+    .order('created_at', { ascending: false })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as unknown as PurchaseCreditSettlementRow[]
 }
 
 export async function fetchReturnItems(returnId: string): Promise<ReturnItemRow[]> {
@@ -230,4 +363,117 @@ export async function fetchPurchasesForSupplier(
     .order('created_at', { ascending: false })
   if (error) throw new Error(error.message)
   return (data ?? []) as ReceivedPurchasePick[]
+}
+
+export async function fetchOpenCreditNotesForSupplier(
+  kitchenId: string,
+  supplierId: string
+) {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('supplier_credit_notes')
+    .select('id, credit_value, status, created_at, supplier_returns!supplier_return_id(id)')
+    .eq('kitchen_id', kitchenId)
+    .eq('supplier_id', supplierId)
+    .in('status', ['open', 'partially_settled'])
+    .order('created_at', { ascending: false })
+  if (error) throw new Error(error.message)
+  return data ?? []
+}
+
+export async function fetchSupplierLedger(
+  kitchenId: string,
+  supplierId: string
+): Promise<SupplierLedgerEntry[]> {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('supplier_ledger_entries')
+    .select('id, kitchen_id, supplier_id, entry_type, amount_signed, source_table, source_id, purchase_id, created_by, created_at')
+    .eq('kitchen_id', kitchenId)
+    .eq('supplier_id', supplierId)
+    .order('created_at', { ascending: false })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as unknown as SupplierLedgerEntry[]
+}
+
+export async function fetchSupplierBalance(supplierId: string): Promise<number> {
+  const supabase = createClient()
+  const { data, error } = await supabase.rpc('current_supplier_balance', { p_supplier_id: supplierId })
+  if (error) throw new Error(error.message)
+  return (data as number) ?? 0
+}
+
+export async function fetchPurchaseOpenBalance(purchaseId: string): Promise<number> {
+  const supabase = createClient()
+  const { data, error } = await supabase.rpc('current_purchase_open_balance', { p_purchase_id: purchaseId })
+  if (error) throw new Error(error.message)
+  return (data as number) ?? 0
+}
+
+export async function fetchSupplierCreditOpenAmount(creditNoteId: string): Promise<number> {
+  const supabase = createClient()
+  const { data, error } = await supabase.rpc('current_supplier_credit_open_amount', {
+    p_credit_note_id: creditNoteId,
+  })
+  if (error) throw new Error(error.message)
+  return (data as number) ?? 0
+}
+
+export async function fetchSupplierPaymentUnallocatedAmount(
+  paymentId: string
+): Promise<number> {
+  const supabase = createClient()
+  const { data, error } = await supabase.rpc('current_supplier_payment_unallocated_amount', {
+    p_payment_id: paymentId,
+  })
+  if (error) throw new Error(error.message)
+  return (data as number) ?? 0
+}
+
+export async function fetchCreditNoteAllocations(creditNoteId: string): Promise<SupplierCreditAllocation[]> {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('supplier_credit_allocations')
+    .select('id, kitchen_id, credit_note_id, purchase_id, amount, allocated_by, created_at, voided_by, voided_at, void_reason, purchases!purchase_id(id, purchase_number)')
+    .eq('credit_note_id', creditNoteId)
+    .order('created_at', { ascending: true })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as unknown as SupplierCreditAllocation[]
+}
+
+export async function fetchCreditNoteRefunds(creditNoteId: string): Promise<SupplierCreditRefund[]> {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('supplier_credit_refunds')
+    .select('id, kitchen_id, credit_note_id, amount, refunded_by, created_at, reversed_by, reversed_at, reversal_reason, refund_account_id, journal_entry_id, refund_account:chart_of_accounts!refund_account_id(id, code, name)')
+    .eq('credit_note_id', creditNoteId)
+    .order('created_at', { ascending: true })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as unknown as SupplierCreditRefund[]
+}
+
+export async function fetchPaymentAllocations(paymentId: string): Promise<SupplierPaymentAllocation[]> {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('supplier_payment_allocations')
+    .select('id, kitchen_id, payment_id, purchase_id, amount, allocated_by, created_at, voided_by, voided_at, void_reason, purchases!purchase_id(id, purchase_number)')
+    .eq('payment_id', paymentId)
+    .order('created_at', { ascending: true })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as unknown as SupplierPaymentAllocation[]
+}
+
+export async function fetchInventoryItemSuppliers(
+  kitchenId: string,
+  inventoryItemId: string
+): Promise<InventoryItemSupplier[]> {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('inventory_item_suppliers')
+    .select('id, inventory_item_id, supplier_id, current_unit_cost, is_preferred, is_active')
+    .eq('kitchen_id', kitchenId)
+    .eq('inventory_item_id', inventoryItemId)
+    .eq('is_active', true)
+  if (error) throw new Error(error.message)
+  return (data ?? []) as unknown as InventoryItemSupplier[]
 }

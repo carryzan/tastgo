@@ -13,58 +13,43 @@ interface CreateReturnData {
   kitchen_id: string
   purchase_id: string
   supplier_id: string
-  created_by: string
   items: ReturnLineItem[]
 }
 
 export async function createSupplierReturn(data: CreateReturnData) {
   const supabase = await createClient()
 
-  const { data: supplierReturn, error: returnError } = await supabase
-    .from('supplier_returns')
-    .insert({
-      kitchen_id: data.kitchen_id,
-      purchase_id: data.purchase_id,
-      supplier_id: data.supplier_id,
-      status: 'pending',
-      created_by: data.created_by,
-    })
-    .select('id')
-    .single()
+  const { error } = await supabase.rpc('create_supplier_return', {
+    p_kitchen_id: data.kitchen_id,
+    p_purchase_id: data.purchase_id,
+    p_supplier_id: data.supplier_id,
+    p_items: data.items.map((item) => ({
+      inventory_item_id: item.inventory_item_id,
+      batch_id: item.batch_id,
+      returned_quantity: item.returned_quantity,
+    })),
+  })
 
-  if (returnError) return new Error(returnError.message)
-
-  if (data.items.length > 0) {
-    const { error: itemsError } = await supabase
-      .from('supplier_return_items')
-      .insert(
-        data.items.map((item) => ({
-          kitchen_id: data.kitchen_id,
-          supplier_return_id: supplierReturn.id,
-          inventory_item_id: item.inventory_item_id,
-          batch_id: item.batch_id,
-          returned_quantity: item.returned_quantity,
-          unit_cost: 0,
-          line_credit_value: 0,
-        }))
-      )
-    if (itemsError) return new Error(itemsError.message)
-  }
-
+  if (error) return new Error(error.message)
   revalidatePath(`/${data.kitchen_id}/procurement`)
 }
 
 export async function approveSupplierReturn(kitchenId: string, returnId: string) {
   const supabase = await createClient()
-  const { error } = await supabase
-    .from('supplier_returns')
-    .update({
-      status: 'approved',
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', returnId)
-    .eq('kitchen_id', kitchenId)
-    .eq('status', 'pending')
+  const { error } = await supabase.rpc('approve_supplier_return', {
+    p_kitchen_id: kitchenId,
+    p_supplier_return_id: returnId,
+  })
+  if (error) return new Error(error.message)
+  revalidatePath(`/${kitchenId}/procurement`)
+}
+
+export async function issueCreditNoteFromReturn(kitchenId: string, returnId: string) {
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('issue_supplier_credit_note_from_return', {
+    p_kitchen_id: kitchenId,
+    p_supplier_return_id: returnId,
+  })
   if (error) return new Error(error.message)
   revalidatePath(`/${kitchenId}/procurement`)
 }

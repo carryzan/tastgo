@@ -56,7 +56,7 @@ interface AddPurchaseSheetProps {
 }
 
 export function AddPurchaseSheet({ open, onOpenChange }: AddPurchaseSheetProps) {
-  const { kitchen, membership } = useKitchen()
+  const { kitchen } = useKitchen()
   const queryClient = useQueryClient()
   const [supplierId, setSupplierId] = useState('')
   const [invoiceCode, setInvoiceCode] = useState('')
@@ -138,17 +138,16 @@ export function AddPurchaseSheet({ open, onOpenChange }: AddPurchaseSheetProps) 
 
     startTransition(async () => {
       try {
-        const result = await createPurchase({
-          kitchen_id: kitchen.id,
-          supplier_id: supplierId,
-          supplier_invoice_code: invoiceCode.trim() || undefined,
-          created_by: membership.id as string,
-          items: items.map((item) => ({
+        const result = await createPurchase(
+          kitchen.id,
+          supplierId,
+          items.map((item) => ({
             inventory_item_id: item.inventory_item_id,
             ordered_quantity: Number(item.ordered_quantity),
             unit_cost: Number(item.unit_cost),
           })),
-        })
+          invoiceCode.trim() || null
+        )
         if (result instanceof Error) return setError(result.message)
         onOpenChange(false)
         queryClient.invalidateQueries({ queryKey: PURCHASES_QUERY_KEY })

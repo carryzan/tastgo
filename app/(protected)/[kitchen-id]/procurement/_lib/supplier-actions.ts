@@ -92,6 +92,7 @@ export async function deleteSupplierOpeningBalance(
     .from('supplier_opening_balances')
     .delete()
     .eq('id', balanceId)
+    .eq('kitchen_id', kitchenId)
   if (error) return new Error(error.message)
   revalidatePath(`/${kitchenId}/procurement`)
 }

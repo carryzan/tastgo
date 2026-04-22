@@ -46,3 +46,19 @@ export async function deleteBatch(id: string, kitchenId: string) {
   if (error) return new Error(error.message)
   revalidatePath('/[kitchen-id]', 'layout')
 }
+
+export async function reverseBatch(
+  id: string,
+  kitchenId: string,
+  reason: string
+) {
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('reverse_production_batch', {
+    p_kitchen_id: kitchenId,
+    p_production_batch_id: id,
+    p_reason: reason,
+  })
+
+  if (error) return new Error(error.message)
+  revalidatePath('/[kitchen-id]', 'layout')
+}

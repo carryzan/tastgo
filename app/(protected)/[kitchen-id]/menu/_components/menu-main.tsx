@@ -38,12 +38,12 @@ import { EditMenuItemSheet } from './edit-menu-item-sheet'
 import { ManageMenuItemModifiersSheet } from './manage-menu-item-modifiers-sheet'
 import { AddRecipeVersionSheet } from './add-recipe-version-sheet'
 import { RecipeVersionHistorySheet } from './recipe-version-history-sheet'
-import { AddMenuItemDialog } from './add-menu-item-dialog'
+import { AddMenuItemSheet } from './add-menu-item-sheet'
 import { ManageMenusDialog } from './manage-menus-dialog'
-import { AddModifierGroupDialog } from './add-modifier-group-dialog'
+import { AddModifierGroupSheet } from './add-modifier-group-sheet'
 import { EditModifierGroupSheet } from './edit-modifier-group-sheet'
 import { ManageModifierOptionsSheet } from './manage-modifier-options-sheet'
-import { AddComboDialog } from './add-combo-dialog'
+import { AddComboSheet } from './add-combo-sheet'
 import { EditComboSheet } from './edit-combo-sheet'
 import { ManageComboItemsSheet } from './manage-combo-items-sheet'
 import {
@@ -355,18 +355,18 @@ export function MenuMain({ initialMenus }: MenuMainProps) {
         </TabsContent>
       </Tabs>
 
-      {/* Add dialogs */}
-      <AddMenuItemDialog
+      {/* Add sheets */}
+      <AddMenuItemSheet
         open={addMenuItemOpen}
         onOpenChange={setAddMenuItemOpen}
         menus={initialMenus}
       />
-      <AddModifierGroupDialog
+      <AddModifierGroupSheet
         open={addModifierGroupOpen}
         onOpenChange={setAddModifierGroupOpen}
         kitchenId={kitchen.id}
       />
-      <AddComboDialog
+      <AddComboSheet
         open={addComboOpen}
         onOpenChange={setAddComboOpen}
         kitchenId={kitchen.id}

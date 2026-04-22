@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useKitchenUpload } from '@/hooks/use-kitchen-upload'
 import { updateCombo } from '../_lib/combo-actions'
 import { COMBOS_QUERY_KEY } from '../_lib/queries'
+import { mapMenuDbError } from '../_lib/db-errors'
 import type { Combo } from './combo-columns'
 import { MenuBrandField, useMenuBrandOptions } from './menu-brand-field'
 import { Button } from '@/components/ui/button'
@@ -35,6 +36,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 
 interface EditComboSheetProps {
   combo: Combo
@@ -50,6 +56,7 @@ export function EditComboSheet({
   const { upload, remove } = useKitchenUpload('combos')
   const kitchenBrands = useMenuBrandOptions()
   const queryClient = useQueryClient()
+  const hasItems = (combo.combo_items?.length ?? 0) > 0
   const [brandId, setBrandId] = useState(combo.brand_id)
   const [name, setName] = useState(combo.name)
   const [pricingType, setPricingType] = useState<'fixed' | 'discounted'>(
@@ -64,17 +71,23 @@ export function EditComboSheet({
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
-  useEffect(() => {
-    if (!open) return
-    setBrandId(combo.brand_id)
-    setName(combo.name)
-    setPricingType(combo.pricing_type)
-    setPrice(typeof combo.price === 'string' ? combo.price : String(combo.price))
-    setComboActive(combo.is_active)
-    setFile(null)
-    setRemoveImage(false)
-    setError(null)
-  }, [open, combo])
+  // Compute the items total from embedded combo_items so we can validate
+  // discounted pricing without a round-trip.
+  const itemsTotal = useMemo(() => {
+    let total = 0
+    for (const ci of combo.combo_items ?? []) {
+      const itemPrice =
+        typeof ci.menu_items?.price === 'string'
+          ? Number(ci.menu_items.price)
+          : (ci.menu_items?.price ?? 0)
+      const qty =
+        typeof ci.quantity === 'string' ? Number(ci.quantity) : (ci.quantity ?? 1)
+      if (Number.isFinite(itemPrice) && Number.isFinite(qty)) {
+        total += itemPrice * qty
+      }
+    }
+    return total
+  }, [combo.combo_items])
 
   function handleOpenChange(next: boolean) {
     if (pending) return
@@ -91,6 +104,12 @@ export function EditComboSheet({
     const priceNum = Number.parseFloat(price)
     if (Number.isNaN(priceNum) || priceNum < 0) {
       return setError('Enter a valid price.')
+    }
+
+    if (pricingType === 'discounted' && itemsTotal > 0 && priceNum >= itemsTotal) {
+      return setError(
+        `Discounted price must be less than the items total (${itemsTotal.toFixed(3)}).`
+      )
     }
 
     startTransition(async () => {
@@ -120,7 +139,7 @@ export function EditComboSheet({
 
         if (Object.keys(updates).length > 0) {
           const u = await updateCombo(combo.id, combo.kitchen_id, updates)
-          if (u instanceof Error) return setError(u.message)
+          if (u instanceof Error) return setError(mapMenuDbError(u))
         }
 
         onOpenChange(false)
@@ -195,6 +214,12 @@ export function EditComboSheet({
                   onChange={(e) => setPrice(e.target.value)}
                   required
                 />
+                {pricingType === 'discounted' && itemsTotal > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Must be less than items total:{' '}
+                    <span className="font-medium">{itemsTotal.toFixed(3)}</span>
+                  </p>
+                )}
               </Field>
               <Field>
                 <FieldLabel htmlFor="ec-img">Replace image</FieldLabel>
@@ -220,12 +245,37 @@ export function EditComboSheet({
               <Field>
                 <div className="flex items-center justify-between">
                   <FieldLabel htmlFor="ec-active">Active</FieldLabel>
-                  <Switch
-                    id="ec-active"
-                    checked={comboActive}
-                    onCheckedChange={setComboActive}
-                  />
+                  {!hasItems && !comboActive ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span>
+                          <Switch
+                            id="ec-active"
+                            checked={comboActive}
+                            onCheckedChange={setComboActive}
+                            disabled
+                            aria-disabled
+                          />
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        Add at least one item before activating this combo.
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : (
+                    <Switch
+                      id="ec-active"
+                      checked={comboActive}
+                      onCheckedChange={setComboActive}
+                    />
+                  )}
                 </div>
+                {!hasItems && (
+                  <p className="text-xs text-muted-foreground">
+                    No items yet. Use &quot;Manage Items&quot; to add one before
+                    activating this combo.
+                  </p>
+                )}
               </Field>
             </FieldGroup>
           </div>

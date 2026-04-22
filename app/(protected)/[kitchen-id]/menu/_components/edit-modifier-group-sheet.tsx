@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState, useTransition } from 'react'
+import { useState, useTransition } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { updateModifierGroup } from '../_lib/modifier-group-actions'
 import { MODIFIER_GROUPS_QUERY_KEY } from '../_lib/queries'
+import { mapMenuDbError } from '../_lib/db-errors'
 import type { ModifierGroup } from './modifier-group-columns'
 import { MenuBrandField, useMenuBrandOptions } from './menu-brand-field'
 import { Button } from '@/components/ui/button'
@@ -25,6 +26,11 @@ import {
   FieldGroup,
   FieldLabel,
 } from '@/components/ui/field'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 
 interface EditModifierGroupSheetProps {
   group: ModifierGroup
@@ -39,6 +45,9 @@ export function EditModifierGroupSheet({
 }: EditModifierGroupSheetProps) {
   const queryClient = useQueryClient()
   const kitchenBrands = useMenuBrandOptions()
+  const activeOptionCount = group.modifier_options.filter(
+    (option) => option.is_active
+  ).length
   const [brandId, setBrandId] = useState(group.brand_id)
   const [name, setName] = useState(group.name)
   const [minSel, setMinSel] = useState(String(group.min_selections))
@@ -48,16 +57,6 @@ export function EditModifierGroupSheet({
   const [groupActive, setGroupActive] = useState(group.is_active)
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
-
-  useEffect(() => {
-    if (!open) return
-    setBrandId(group.brand_id)
-    setName(group.name)
-    setMinSel(String(group.min_selections))
-    setMaxSel(group.max_selections == null ? '' : String(group.max_selections))
-    setGroupActive(group.is_active)
-    setError(null)
-  }, [open, group])
 
   function handleOpenChange(next: boolean) {
     if (pending) return
@@ -93,7 +92,7 @@ export function EditModifierGroupSheet({
           max_selections,
           is_active: groupActive,
         })
-        if (gRes instanceof Error) return setError(gRes.message)
+        if (gRes instanceof Error) return setError(mapMenuDbError(gRes))
 
         onOpenChange(false)
         queryClient.invalidateQueries({ queryKey: MODIFIER_GROUPS_QUERY_KEY })
@@ -168,12 +167,38 @@ export function EditModifierGroupSheet({
               <Field>
                 <div className="flex items-center justify-between">
                   <FieldLabel htmlFor="mg-active">Active</FieldLabel>
-                  <Switch
-                    id="mg-active"
-                    checked={groupActive}
-                    onCheckedChange={setGroupActive}
-                  />
+                  {activeOptionCount === 0 && !groupActive ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span>
+                          <Switch
+                            id="mg-active"
+                            checked={groupActive}
+                            onCheckedChange={setGroupActive}
+                            disabled
+                            aria-disabled
+                          />
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        Add at least one active option before activating this
+                        group.
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : (
+                    <Switch
+                      id="mg-active"
+                      checked={groupActive}
+                      onCheckedChange={setGroupActive}
+                    />
+                  )}
                 </div>
+                {activeOptionCount === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    No active options yet. Use &quot;Manage Options&quot; to
+                    add one or turn one on.
+                  </p>
+                )}
               </Field>
             </FieldGroup>
           </div>

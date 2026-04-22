@@ -37,10 +37,10 @@ export function AddSupplierSheet({ open, onOpenChange }: AddSupplierSheetProps) 
   const [pending, startTransition] = useTransition()
 
   const balanceDate =
-    typeof kitchenSettings?.balance_date === 'string'
-      ? kitchenSettings.balance_date
+    typeof kitchenSettings?.opening_supplier_date === 'string'
+      ? kitchenSettings.opening_supplier_date
       : null
-  const showOB = kitchenSettings?.balance_completed !== true && !!balanceDate
+  const showOB = kitchenSettings?.opening_supplier_completed !== true && !!balanceDate
 
   function handleOpenChange(next: boolean) {
     if (pending) return

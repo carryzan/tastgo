@@ -1,13 +1,14 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import { PlusIcon, TrashIcon } from 'lucide-react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   saveModifierGroupOptions,
   type ModifierOptionType,
 } from '../_lib/modifier-option-actions'
 import { MODIFIER_GROUPS_QUERY_KEY } from '../_lib/queries'
+import { mapMenuDbError } from '../_lib/db-errors'
 import {
   fetchActiveInventoryItemPicks,
   fetchModifierOptions,
@@ -88,10 +89,21 @@ export function ManageModifierOptionsSheet({
   onOpenChange,
 }: ManageModifierOptionsSheetProps) {
   const queryClient = useQueryClient()
-  const [inventoryItems, setInventoryItems] = useState<InventoryItemBasicPick[]>([])
-  const [options, setOptions] = useState<LocalOption[]>([])
+  const [draftOptions, setDraftOptions] = useState<LocalOption[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
+  const { data: inventoryItems = [], isError: inventoryItemsLoadError } = useQuery<
+    InventoryItemBasicPick[]
+  >({
+    queryKey: ['modifier-option-inventory-picks', group.kitchen_id],
+    queryFn: () => fetchActiveInventoryItemPicks(group.kitchen_id),
+    enabled: open,
+  })
+  const { data: fetchedOptions = [], isError: optionsLoadError } = useQuery({
+    queryKey: ['modifier-options', group.id, group.kitchen_id],
+    queryFn: () => fetchModifierOptions(group.id, group.kitchen_id),
+    enabled: open,
+  })
 
   const invIds = useMemo(() => inventoryItems.map((i) => i.id), [inventoryItems])
   const invLabelById = useMemo(() => {
@@ -100,52 +112,49 @@ export function ManageModifierOptionsSheet({
     return m
   }, [inventoryItems])
 
-  const load = useCallback(async () => {
-    try {
-      const [inv, opts] = await Promise.all([
-        fetchActiveInventoryItemPicks(group.kitchen_id),
-        fetchModifierOptions(group.id, group.kitchen_id),
-      ])
-      setInventoryItems(inv)
-      setOptions(
-        opts.map((o) => {
-          const id = String(o.id)
-          return {
-            key: id,
-            id,
-            name: String(o.name ?? ''),
-            type: (o.type as ModifierOptionType) ?? 'neutral',
-            inventory_item_id: String(o.inventory_item_id ?? ''),
-            removed_inventory_item_id: String(
-              o.removed_inventory_item_id ?? ''
-            ),
-            quantity: o.quantity == null ? '' : String(o.quantity),
-            price_charge: String(o.price_charge ?? '0'),
-            is_active: Boolean(o.is_active),
-          }
-        })
-      )
-    } catch {
-      setError('Failed to load options.')
-    }
-  }, [group.id, group.kitchen_id])
-
-  useEffect(() => {
-    if (!open) return
-    setError(null)
-    void load()
-  }, [open, load])
+  const fetchedOptionRows = useMemo(
+    () =>
+      fetchedOptions.map((option) => {
+        const id = String(option.id)
+        return {
+          key: id,
+          id,
+          name: String(option.name ?? ''),
+          type: (option.type as ModifierOptionType) ?? 'neutral',
+          inventory_item_id: String(option.inventory_item_id ?? ''),
+          removed_inventory_item_id: String(
+            option.removed_inventory_item_id ?? ''
+          ),
+          quantity: option.quantity == null ? '' : String(option.quantity),
+          price_charge: String(option.price_charge ?? '0'),
+          is_active: Boolean(option.is_active),
+        }
+      }),
+    [fetchedOptions]
+  )
+  const options = draftOptions ?? fetchedOptionRows
+  const displayedError =
+    error ||
+    (inventoryItemsLoadError || optionsLoadError
+      ? 'Failed to load options.'
+      : null)
 
   function handleOpenChange(next: boolean) {
     if (pending) return
     onOpenChange(next)
-    if (!next) setError(null)
+    if (!next) {
+      setDraftOptions(null)
+      setError(null)
+    }
   }
 
   function updateOption(idx: number, patch: Partial<LocalOption>) {
-    setOptions((p) =>
-      p.map((x, i) => (i === idx ? { ...x, ...patch } : x))
-    )
+    setDraftOptions((current) => {
+      const base = current ?? fetchedOptionRows
+      return base.map((option, index) =>
+        index === idx ? { ...option, ...patch } : option
+      )
+    })
   }
 
   function validateOptions(): string | null {
@@ -157,18 +166,29 @@ export function ManageModifierOptionsSheet({
       if (o.type === 'addition' || o.type === 'substitution') {
         const q = Number.parseFloat(o.quantity)
         if (o.quantity.trim() === '' || Number.isNaN(q) || q <= 0) {
-          return `Option "${o.name}": quantity is required for this type.`
+          return `Option "${o.name}": quantity is required for ${o.type} type.`
         }
         if (!o.inventory_item_id) {
-          return `Option "${o.name}": select an inventory item.`
+          return `Option "${o.name}": select an inventory item for ${o.type} type.`
         }
       }
       if (o.type === 'removal' || o.type === 'substitution') {
         if (!o.removed_inventory_item_id) {
-          return `Option "${o.name}": select a removed inventory item.`
+          return `Option "${o.name}": select the item being removed for ${o.type} type.`
         }
       }
     }
+
+    // Prevent deactivating the last active option when the group itself is active.
+    // The DB will enforce this too (guard_modifier_group_last_option), but we
+    // block it client-side for a better UX.
+    if (group.is_active) {
+      const activeCount = options.filter((o) => o.is_active).length
+      if (activeCount === 0) {
+        return 'Cannot deactivate all options — the group is active. Deactivate the group first or keep at least one option active.'
+      }
+    }
+
     return null
   }
 
@@ -201,7 +221,7 @@ export function ManageModifierOptionsSheet({
           group.kitchen_id,
           payload
         )
-        if (oRes instanceof Error) return setError(oRes.message)
+        if (oRes instanceof Error) return setError(mapMenuDbError(oRes))
 
         onOpenChange(false)
         queryClient.invalidateQueries({ queryKey: MODIFIER_GROUPS_QUERY_KEY })
@@ -237,7 +257,12 @@ export function ManageModifierOptionsSheet({
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => setOptions((p) => [...p, newLocalOption()])}
+              onClick={() =>
+                setDraftOptions((current) => [
+                  ...(current ?? fetchedOptionRows),
+                  newLocalOption(),
+                ])
+              }
               disabled={pending}
             >
               <PlusIcon />
@@ -429,7 +454,11 @@ export function ManageModifierOptionsSheet({
                           size="icon"
                           className="h-8 w-8 text-destructive hover:text-destructive"
                           onClick={() =>
-                            setOptions((p) => p.filter((_, i) => i !== idx))
+                            setDraftOptions((current) =>
+                              (current ?? fetchedOptionRows).filter(
+                                (_, index) => index !== idx
+                              )
+                            )
                           }
                           disabled={pending}
                         >
@@ -446,9 +475,9 @@ export function ManageModifierOptionsSheet({
 
         <div className="border-t" />
 
-        {error && (
+        {displayedError && (
           <div className="px-4 pt-3">
-            <FieldError>{error}</FieldError>
+            <FieldError>{displayedError}</FieldError>
           </div>
         )}
 

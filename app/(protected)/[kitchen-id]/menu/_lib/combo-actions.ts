@@ -10,11 +10,28 @@ export async function createCombo(data: {
   image_url?: string | null
   pricing_type: 'fixed' | 'discounted'
   price: number
+  items: { menu_item_id: string; quantity: number }[]
 }) {
   const supabase = await createClient()
-  const { error } = await supabase.from('combos').insert(data)
+  const { data: comboId, error } = await supabase.rpc(
+    'create_combo_with_items',
+    {
+      p_kitchen_id: data.kitchen_id,
+      p_brand_id: data.brand_id,
+      p_name: data.name,
+      p_pricing_type: data.pricing_type,
+      p_price: data.price,
+      p_image_url: data.image_url ?? null,
+      p_items: data.items.map((item) => ({
+        menu_item_id: item.menu_item_id,
+        quantity: item.quantity,
+      })),
+    }
+  )
+
   if (error) return new Error(error.message)
   revalidatePath(`/${data.kitchen_id}/menu`)
+  return comboId as string
 }
 
 export async function updateCombo(
@@ -53,37 +70,10 @@ export async function deleteCombo(id: string, kitchenId: string) {
   revalidatePath(`/${kitchenId}/menu`)
 }
 
-export async function addComboItem(data: {
-  kitchen_id: string
-  combo_id: string
-  menu_item_id: string
-  sort_order?: number
-}) {
-  const supabase = await createClient()
-  const { sort_order = 0, ...rest } = data
-  const { error } = await supabase.from('combo_items').insert({
-    ...rest,
-    sort_order,
-  })
-  if (error) return new Error(error.message)
-  revalidatePath(`/${data.kitchen_id}/menu`)
-}
-
-export async function removeComboItem(id: string, kitchenId: string) {
-  const supabase = await createClient()
-  const { error } = await supabase
-    .from('combo_items')
-    .delete()
-    .eq('id', id)
-    .eq('kitchen_id', kitchenId)
-  if (error) return new Error(error.message)
-  revalidatePath(`/${kitchenId}/menu`)
-}
-
 export async function replaceComboItems(
   comboId: string,
   kitchenId: string,
-  rows: { menu_item_id: string; sort_order: number }[]
+  rows: { menu_item_id: string; quantity: number }[]
 ) {
   const supabase = await createClient()
   const { error: delError } = await supabase
@@ -99,7 +89,7 @@ export async function replaceComboItems(
         kitchen_id: kitchenId,
         combo_id: comboId,
         menu_item_id: r.menu_item_id,
-        sort_order: r.sort_order,
+        quantity: r.quantity,
       }))
     )
     if (insError) return new Error(insError.message)

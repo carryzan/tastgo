@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { HistoryIcon } from 'lucide-react'
 import type { MenuItem } from './menu-item-columns'
 import {
@@ -42,13 +42,6 @@ export function RecipeVersionHistorySheet({
   const [componentsByVersion, setComponentsByVersion] = useState<
     Record<string, MenuRecipeComponent[] | 'loading'>
   >({})
-
-  useEffect(() => {
-    if (!open) {
-      setOpenValues([])
-      setComponentsByVersion({})
-    }
-  }, [open])
 
   function handleAccordionChange(values: string[]) {
     setOpenValues(values)

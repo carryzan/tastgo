@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useKitchen } from '@/hooks/use-kitchen'
-import { approveSupplierReturn } from '../_lib/return-actions'
+import { approveSupplierReturn, issueCreditNoteFromReturn } from '../_lib/return-actions'
 import { RETURNS_QUERY_KEY, CREDIT_NOTES_QUERY_KEY } from '../_lib/queries'
 import { fetchReturnItems } from '../_lib/client-queries'
 import type { SupplierReturn } from './return-columns'
@@ -61,6 +61,21 @@ export function ReturnDetailSheet({
     startTransition(async () => {
       try {
         const result = await approveSupplierReturn(kitchen.id, supplierReturn.id)
+        if (result instanceof Error) return setError(result.message)
+        queryClient.invalidateQueries({ queryKey: RETURNS_QUERY_KEY })
+        queryClient.invalidateQueries({ queryKey: CREDIT_NOTES_QUERY_KEY })
+        onOpenChange(false)
+      } catch {
+        setError('Something went wrong. Please try again.')
+      }
+    })
+  }
+
+  function handleIssueCreditNote() {
+    setError(null)
+    startTransition(async () => {
+      try {
+        const result = await issueCreditNoteFromReturn(kitchen.id, supplierReturn.id)
         if (result instanceof Error) return setError(result.message)
         queryClient.invalidateQueries({ queryKey: RETURNS_QUERY_KEY })
         queryClient.invalidateQueries({ queryKey: CREDIT_NOTES_QUERY_KEY })
@@ -150,11 +165,11 @@ export function ReturnDetailSheet({
           </div>
         </div>
 
-        {(error || supplierReturn.status === 'pending') && (
+        {(error || supplierReturn.status === 'pending' || supplierReturn.status === 'approved') && (
           <div className="shrink-0 border-t px-4 py-3">
             {error && <FieldError className="mb-3">{error}</FieldError>}
-            {supplierReturn.status === 'pending' && (
-              <SheetFooter>
+            <SheetFooter className="gap-2">
+              {supplierReturn.status === 'pending' && (
                 <Button
                   onClick={handleApprove}
                   disabled={isLoading || pending}
@@ -163,8 +178,18 @@ export function ReturnDetailSheet({
                   {pending && <Spinner data-icon="inline-start" />}
                   Approve return
                 </Button>
-              </SheetFooter>
-            )}
+              )}
+              {supplierReturn.status === 'approved' && (
+                <Button
+                  onClick={handleIssueCreditNote}
+                  disabled={isLoading || pending}
+                  className="min-w-28"
+                >
+                  {pending && <Spinner data-icon="inline-start" />}
+                  Issue credit note
+                </Button>
+              )}
+            </SheetFooter>
           </div>
         )}
       </SheetContent>

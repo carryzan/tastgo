@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useKitchen } from '@/hooks/use-kitchen'
 import { replaceMenuItemModifierGroups } from '../_lib/menu-item-actions'
 import { MENU_ITEMS_QUERY_KEY } from '../_lib/queries'
+import { mapMenuDbError } from '../_lib/db-errors'
 import {
   fetchModifierGroupsForBrand,
   fetchMenuItemModifierLinks,
@@ -139,7 +140,7 @@ export function ManageMenuItemModifiersSheet({
           kitchen.id,
           normalizedLinks
         )
-        if (result instanceof Error) return setError(result.message)
+        if (result instanceof Error) return setError(mapMenuDbError(result))
         onOpenChange(false)
         queryClient.invalidateQueries({ queryKey: MENU_ITEMS_QUERY_KEY })
       } catch {

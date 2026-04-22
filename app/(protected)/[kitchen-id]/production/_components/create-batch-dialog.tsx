@@ -90,6 +90,8 @@ export function CreateBatchDialog({ servicePeriods }: CreateBatchDialogProps) {
       .select('id, name, current_version_id')
       .eq('kitchen_id', kitchen.id)
       .eq('is_active', true)
+      .eq('track_stock', true)
+      .not('current_version_id', 'is', null)
       .order('name')
       .then(({ data }) => setRecipes((data ?? []) as RecipeOption[]))
   }, [open, kitchen.id])

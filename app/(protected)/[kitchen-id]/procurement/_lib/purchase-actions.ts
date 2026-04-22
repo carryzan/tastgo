@@ -9,14 +9,6 @@ interface PurchaseLineItem {
   unit_cost: number
 }
 
-interface CreatePurchaseData {
-  kitchen_id: string
-  supplier_id: string
-  supplier_invoice_code?: string
-  created_by: string
-  items: PurchaseLineItem[]
-}
-
 interface UpdatePurchaseData {
   supplier_id?: string
   supplier_invoice_code?: string | null
@@ -27,38 +19,38 @@ interface ReceivePurchaseItem {
   received_quantity: number
 }
 
-export async function createPurchase(data: CreatePurchaseData) {
+export async function createPurchase(
+  kitchenId: string,
+  supplierId: string,
+  items: PurchaseLineItem[],
+  supplierInvoiceCode?: string | null
+) {
   const supabase = await createClient()
 
-  const { data: purchase, error: purchaseError } = await supabase
-    .from('purchases')
-    .insert({
-      kitchen_id: data.kitchen_id,
-      supplier_id: data.supplier_id,
-      supplier_invoice_code: data.supplier_invoice_code ?? null,
-      status: 'draft',
-      created_by: data.created_by,
-    })
-    .select('id')
-    .single()
+  const { data, error } = await supabase.rpc('create_purchase', {
+    p_kitchen_id: kitchenId,
+    p_supplier_id: supplierId,
+    p_items: items.map((item) => ({
+      inventory_item_id: item.inventory_item_id,
+      ordered_quantity: item.ordered_quantity,
+      unit_cost: item.unit_cost,
+    })),
+  })
 
-  if (purchaseError) return new Error(purchaseError.message)
+  if (error) return new Error(error.message)
 
-  if (data.items.length > 0) {
-    const { error: itemsError } = await supabase.from('purchase_items').insert(
-      data.items.map((item) => ({
-        kitchen_id: data.kitchen_id,
-        purchase_id: purchase.id,
-        inventory_item_id: item.inventory_item_id,
-        ordered_quantity: item.ordered_quantity,
-        unit_cost: item.unit_cost,
-        line_total: 0,
-      }))
-    )
-    if (itemsError) return new Error(itemsError.message)
+  // Supplier invoice code is not supported by the RPC directly — update separately if provided
+  if (supplierInvoiceCode && data) {
+    const { error: updateError } = await supabase
+      .from('purchases')
+      .update({ supplier_invoice_code: supplierInvoiceCode })
+      .eq('id', data as string)
+      .eq('kitchen_id', kitchenId)
+      .eq('status', 'draft')
+    if (updateError) return new Error(updateError.message)
   }
 
-  revalidatePath(`/${data.kitchen_id}/procurement`)
+  revalidatePath(`/${kitchenId}/procurement`)
 }
 
 export async function updatePurchase(
@@ -110,16 +102,10 @@ export async function replacePurchaseItems(
 
 export async function markPurchaseSent(kitchenId: string, purchaseId: string) {
   const supabase = await createClient()
-  const { error } = await supabase
-    .from('purchases')
-    .update({
-      status: 'sent',
-      sent_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', purchaseId)
-    .eq('kitchen_id', kitchenId)
-    .eq('status', 'draft')
+  const { error } = await supabase.rpc('send_purchase', {
+    p_kitchen_id: kitchenId,
+    p_purchase_id: purchaseId,
+  })
   if (error) return new Error(error.message)
   revalidatePath(`/${kitchenId}/procurement`)
 }
@@ -127,32 +113,36 @@ export async function markPurchaseSent(kitchenId: string, purchaseId: string) {
 export async function receivePurchase(
   kitchenId: string,
   purchaseId: string,
-  receivedBy: string,
   items: ReceivePurchaseItem[]
 ) {
   const supabase = await createClient()
 
-  for (const item of items) {
-    const { error } = await supabase
-      .from('purchase_items')
-      .update({ received_quantity: item.received_quantity })
-      .eq('id', item.purchase_item_id)
-      .eq('purchase_id', purchaseId)
-    if (error) return new Error(error.message)
-  }
+  const { error } = await supabase.rpc('receive_purchase', {
+    p_kitchen_id: kitchenId,
+    p_purchase_id: purchaseId,
+    p_items: items.map((item) => ({
+      purchase_item_id: item.purchase_item_id,
+      received_quantity: item.received_quantity,
+    })),
+  })
 
-  const { error } = await supabase
-    .from('purchases')
-    .update({
-      status: 'received',
-      received_at: new Date().toISOString(),
-      received_by: receivedBy,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', purchaseId)
-    .eq('kitchen_id', kitchenId)
-    .eq('status', 'sent')
   if (error) return new Error(error.message)
+  revalidatePath(`/${kitchenId}/procurement`)
+}
 
+export async function reassignPurchaseSupplier(
+  kitchenId: string,
+  purchaseId: string,
+  toSupplierId: string,
+  reason: string
+) {
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('reassign_purchase_supplier', {
+    p_kitchen_id: kitchenId,
+    p_purchase_id: purchaseId,
+    p_to_supplier_id: toSupplierId,
+    p_reason: reason,
+  })
+  if (error) return new Error(error.message)
   revalidatePath(`/${kitchenId}/procurement`)
 }

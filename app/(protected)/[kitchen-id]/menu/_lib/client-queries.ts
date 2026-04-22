@@ -19,6 +19,7 @@ export interface ProductionRecipePick {
 export interface MenuItemPick {
   id: string
   name: string
+  price: number | string
 }
 
 export interface ModifierGroupPick {
@@ -37,8 +38,10 @@ export interface MenuRecipeComponent {
   component_type: string
   recipe_quantity: string
   yield_adjusted_quantity: string
+  production_recipe_version_id: string | null
   inventory_items?: { name: string } | { name: string }[] | null
   production_recipes?: { name: string } | { name: string }[] | null
+  production_recipe_versions?: { version_number: number } | { version_number: number }[] | null
   units_of_measure?:
     | { abbreviation: string }
     | { abbreviation: string }[]
@@ -76,6 +79,7 @@ export async function fetchActiveProductionRecipes(kitchenId: string) {
     .select('id, name')
     .eq('kitchen_id', kitchenId)
     .eq('is_active', true)
+    .not('current_version_id', 'is', null)
     .order('name')
   if (error) throw new Error(error.message)
   return (data ?? []) as ProductionRecipePick[]
@@ -86,7 +90,7 @@ export async function fetchRecipeVersionComponents(versionId: string) {
   const { data, error } = await supabase
     .from('menu_item_recipe_components')
     .select(
-      'id, component_type, recipe_quantity, yield_adjusted_quantity, inventory_items(name), production_recipes(name), units_of_measure(abbreviation)'
+      'id, component_type, recipe_quantity, yield_adjusted_quantity, production_recipe_version_id, inventory_items(name), production_recipes(name), production_recipe_versions:production_recipe_version_id(version_number), units_of_measure(abbreviation)'
     )
     .eq('recipe_version_id', versionId)
   if (error) throw new Error(error.message)
@@ -144,7 +148,7 @@ export async function fetchMenuItemPicksForBrand(
   const supabase = createClient()
   const { data, error } = await supabase
     .from('menu_items')
-    .select('id, name')
+    .select('id, name, price')
     .eq('kitchen_id', kitchenId)
     .eq('brand_id', brandId)
     .eq('is_active', true)

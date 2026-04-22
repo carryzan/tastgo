@@ -18,6 +18,7 @@ interface CreateMenuItemData {
   name: string
   price: number
   image_url?: string | null
+  components: RecipeComponentInput[]
 }
 
 interface UpdateMenuItemData {
@@ -31,9 +32,34 @@ interface UpdateMenuItemData {
 
 export async function createMenuItem(data: CreateMenuItemData) {
   const supabase = await createClient()
-  const { error } = await supabase.from('menu_items').insert(data)
+  const { data: menuItemId, error } = await supabase.rpc(
+    'create_menu_item_with_initial_version',
+    {
+      p_kitchen_id: data.kitchen_id,
+      p_brand_id: data.brand_id,
+      p_menu_id: data.menu_id,
+      p_name: data.name,
+      p_price: data.price,
+      p_image_url: data.image_url ?? null,
+      p_components: data.components.map((component) => ({
+        component_type: component.component_type,
+        inventory_item_id:
+          component.component_type === 'inventory_item'
+            ? (component.inventory_item_id ?? null)
+            : null,
+        production_recipe_id:
+          component.component_type === 'production_recipe'
+            ? (component.production_recipe_id ?? null)
+            : null,
+        recipe_quantity: component.recipe_quantity,
+        uom_id: component.uom_id,
+      })),
+    }
+  )
+
   if (error) return new Error(error.message)
   revalidatePath(`/${data.kitchen_id}/menu`)
+  return menuItemId as string
 }
 
 export async function updateMenuItem(
@@ -61,36 +87,6 @@ export async function deleteMenuItem(id: string, kitchenId: string) {
     .delete()
     .eq('id', id)
     .eq('kitchen_id', kitchenId)
-  if (error) return new Error(error.message)
-  revalidatePath(`/${kitchenId}/menu`)
-}
-
-export async function attachModifierGroup(
-  menuItemId: string,
-  modifierGroupId: string,
-  kitchenId: string
-) {
-  const supabase = await createClient()
-  const { error } = await supabase.from('menu_item_modifier_groups').insert({
-    kitchen_id: kitchenId,
-    menu_item_id: menuItemId,
-    modifier_group_id: modifierGroupId,
-  })
-  if (error) return new Error(error.message)
-  revalidatePath(`/${kitchenId}/menu`)
-}
-
-export async function detachModifierGroup(
-  menuItemId: string,
-  modifierGroupId: string,
-  kitchenId: string
-) {
-  const supabase = await createClient()
-  const { error } = await supabase
-    .from('menu_item_modifier_groups')
-    .delete()
-    .eq('menu_item_id', menuItemId)
-    .eq('modifier_group_id', modifierGroupId)
   if (error) return new Error(error.message)
   revalidatePath(`/${kitchenId}/menu`)
 }
@@ -125,85 +121,44 @@ export async function replaceMenuItemModifierGroups(
   revalidatePath(`/${kitchenId}/menu`)
 }
 
+/**
+ * Creates a new recipe version for a menu item using the DB RPC.
+ * The RPC handles: version numbering, component insertion, yield-adjusted-quantity
+ * computation, production_recipe_version_id freezing, and updating
+ * menu_items.current_recipe_version_id automatically.
+ * Returns the new version id on success.
+ */
 export async function createMenuItemRecipeVersion(data: {
   kitchen_id: string
   menu_item_id: string
-  created_by: string
   components: RecipeComponentInput[]
-}) {
+}): Promise<string | Error> {
   const supabase = await createClient()
-  const { kitchen_id, menu_item_id, created_by, components } = data
+  const { kitchen_id, menu_item_id, components } = data
 
-  // Fetch yield_percentage for all inventory items used
-  const inventoryItemIds = components
-    .filter((c) => c.component_type === 'inventory_item' && c.inventory_item_id)
-    .map((c) => c.inventory_item_id!)
-
-  const yieldMap = new Map<string, number>()
-  if (inventoryItemIds.length > 0) {
-    const { data: items, error: itemsError } = await supabase
-      .from('inventory_items')
-      .select('id, yield_percentage')
-      .in('id', inventoryItemIds)
-    if (itemsError) return new Error(itemsError.message)
-    for (const item of items ?? []) {
-      yieldMap.set(item.id, item.yield_percentage as number)
+  const { data: versionId, error } = await supabase.rpc(
+    'create_menu_item_recipe_version',
+    {
+      p_kitchen_id: kitchen_id,
+      p_menu_item_id: menu_item_id,
+      p_components: components.map((c) => ({
+        component_type: c.component_type,
+        inventory_item_id:
+          c.component_type === 'inventory_item'
+            ? (c.inventory_item_id ?? null)
+            : null,
+        production_recipe_id:
+          c.component_type === 'production_recipe'
+            ? (c.production_recipe_id ?? null)
+            : null,
+        recipe_quantity: c.recipe_quantity,
+        uom_id: c.uom_id,
+      })),
     }
-  }
+  )
 
-  // Get next version number
-  const { data: maxData, error: maxError } = await supabase
-    .from('menu_item_recipe_versions')
-    .select('version_number')
-    .eq('menu_item_id', menu_item_id)
-    .order('version_number', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  if (maxError) return new Error(maxError.message)
-
-  const nextVersion = (maxData?.version_number ?? 0) + 1
-
-  const { data: version, error: versionError } = await supabase
-    .from('menu_item_recipe_versions')
-    .insert({ kitchen_id, menu_item_id, version_number: nextVersion, created_by })
-    .select('id')
-    .single()
-
-  if (versionError) return new Error(versionError.message)
-
-  if (components.length > 0) {
-    const { error: componentsError } = await supabase
-      .from('menu_item_recipe_components')
-      .insert(
-        components.map((c) => {
-          const qty = c.recipe_quantity
-          let yieldAdjusted = qty
-          if (c.component_type === 'inventory_item' && c.inventory_item_id) {
-            const yieldPct = yieldMap.get(c.inventory_item_id) ?? 100
-            yieldAdjusted = yieldPct > 0 ? qty / (yieldPct / 100) : qty
-          }
-          return {
-            kitchen_id,
-            recipe_version_id: version.id,
-            component_type: c.component_type,
-            inventory_item_id: c.inventory_item_id ?? null,
-            production_recipe_id: c.production_recipe_id ?? null,
-            recipe_quantity: qty,
-            yield_adjusted_quantity: Number(yieldAdjusted.toFixed(4)),
-            uom_id: c.uom_id,
-          }
-        })
-      )
-    if (componentsError) return new Error(componentsError.message)
-  }
-
-  const { error: updateError } = await supabase
-    .from('menu_items')
-    .update({ current_recipe_version_id: version.id })
-    .eq('id', menu_item_id)
-
-  if (updateError) return new Error(updateError.message)
+  if (error) return new Error(error.message)
 
   revalidatePath(`/${kitchen_id}/menu`)
+  return versionId as string
 }

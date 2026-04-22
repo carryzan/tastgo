@@ -2,8 +2,9 @@
 
 import type { ReactNode } from 'react'
 import type { ColumnDef, Row } from '@tanstack/react-table'
-import { CheckCircleIcon } from 'lucide-react'
-import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
+import { CheckCircleIcon, LayoutListIcon, RotateCcwIcon } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { getSelectColumn } from '@/components/data-table/data-table-select-column'
 import { DataTableRowActions } from '@/components/data-table/data-table-row-actions'
 import type { ColumnConfig, Permission } from '@/lib/types/data-table'
@@ -21,12 +22,23 @@ export interface Batch {
   batch_id: string | null
   created_by: string
   created_at: string
+  status: 'draft' | 'completed' | 'reversed'
+  reversed_by: string | null
+  reversed_at: string | null
+  reversal_reason: string | null
   production_recipes: { id: string; name: string } | null
   production_recipe_versions: { id: string; version_number: number } | null
   production_service_periods: { id: string; name: string } | null
 }
 
+const STATUS_BADGE: Record<Batch['status'], { label: string; variant: 'secondary' | 'default' | 'destructive' | 'outline' }> = {
+  draft: { label: 'Draft', variant: 'secondary' },
+  completed: { label: 'Completed', variant: 'default' },
+  reversed: { label: 'Reversed', variant: 'destructive' },
+}
+
 export const batchColumnConfigs: ColumnConfig[] = [
+  { column: 'status', label: 'Status', type: 'text', sortable: true },
   { column: 'production_recipes.name', label: 'Recipe', type: 'text', sortable: true },
   { column: 'production_recipe_versions.version_number', label: 'Version', type: 'number', sortable: true },
   { column: 'production_service_periods.name', label: 'Service Period', type: 'text', sortable: true },
@@ -42,17 +54,39 @@ export function getBatchColumns(
   callbacks: {
     onDelete: (row: Row<Batch>) => void
     onComplete: (row: Row<Batch>) => void
+    onReverse: (row: Row<Batch>) => void
+    onViewComponents: (row: Row<Batch>) => void
   }
 ): ColumnDef<Batch>[] {
   const showRowActions = Boolean(permissions.canEdit || permissions.canDelete)
 
   const extraItems = (row: Row<Batch>): ReactNode => {
-    if (row.original.actual_quantity != null) return null
+    const { status } = row.original
     return (
-      <DropdownMenuItem onClick={() => callbacks.onComplete(row)}>
-        <CheckCircleIcon />
-        Complete
-      </DropdownMenuItem>
+      <>
+        <DropdownMenuItem onClick={() => callbacks.onViewComponents(row)}>
+          <LayoutListIcon />
+          View Components
+        </DropdownMenuItem>
+        {status === 'draft' && (
+          <DropdownMenuItem onClick={() => callbacks.onComplete(row)}>
+            <CheckCircleIcon />
+            Complete
+          </DropdownMenuItem>
+        )}
+        {status === 'completed' && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => callbacks.onReverse(row)}
+              className="text-destructive focus:text-destructive"
+            >
+              <RotateCcwIcon />
+              Reverse
+            </DropdownMenuItem>
+          </>
+        )}
+      </>
     )
   }
 
@@ -63,7 +97,10 @@ export function getBatchColumns(
             renderRowEnd: (row) => (
               <DataTableRowActions
                 row={row}
-                permissions={{ canEdit: false, canDelete: permissions.canDelete }}
+                permissions={{
+                  canEdit: false,
+                  canDelete: permissions.canDelete && row.original.status === 'draft',
+                }}
                 onEdit={() => {}}
                 onDelete={callbacks.onDelete}
                 extraItems={extraItems}
@@ -72,6 +109,15 @@ export function getBatchColumns(
           }
         : undefined
     ),
+    {
+      accessorKey: 'status',
+      header: 'Status',
+      cell: ({ row }) => {
+        const cfg = STATUS_BADGE[row.original.status]
+        return <Badge variant={cfg.variant}>{cfg.label}</Badge>
+      },
+      enableSorting: true,
+    },
     {
       id: 'recipe_name',
       header: 'Recipe',

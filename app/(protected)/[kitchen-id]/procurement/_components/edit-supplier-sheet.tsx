@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState, useTransition } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useState, useTransition } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useKitchen } from '@/hooks/use-kitchen'
 import {
   updateSupplier,
@@ -53,35 +53,18 @@ export function EditSupplierSheet({
   const [pending, startTransition] = useTransition()
 
   const balanceDate =
-    typeof kitchenSettings?.balance_date === 'string'
-      ? kitchenSettings.balance_date
+    typeof kitchenSettings?.opening_supplier_date === 'string'
+      ? kitchenSettings.opening_supplier_date
       : null
-  const showOB = kitchenSettings?.balance_completed !== true && !!balanceDate
+  const showOB = kitchenSettings?.opening_supplier_completed !== true && !!balanceDate
 
-  const [balance, setBalance] = useState<SupplierBalance | null>(null)
-  const [balanceLoaded, setBalanceLoaded] = useState(false)
   const [removeBalance, setRemoveBalance] = useState(false)
 
-  useEffect(() => {
-    if (!open) {
-      setIsActive(supplier.is_active)
-      setError(null)
-      setBalance(null)
-      setBalanceLoaded(false)
-      setRemoveBalance(false)
-      return
-    }
-    if (!showOB) return
-    setBalanceLoaded(false)
-    fetchSupplierOpeningBalance(kitchen.id, supplier.id)
-      .then((result) => {
-        setBalance(result as SupplierBalance | null)
-        setBalanceLoaded(true)
-      })
-      .catch(() => {
-        setBalanceLoaded(true)
-      })
-  }, [open, supplier.id, supplier.is_active, kitchen.id, showOB])
+  const { data: balance, isLoading: balanceLoading } = useQuery<SupplierBalance | null>({
+    queryKey: ['supplier-opening-balance', kitchen.id, supplier.id],
+    queryFn: () => fetchSupplierOpeningBalance(kitchen.id, supplier.id),
+    enabled: open && showOB,
+  })
 
   function handleOpenChange(next: boolean) {
     if (pending) return
@@ -140,6 +123,7 @@ export function EditSupplierSheet({
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetContent
+        className="flex flex-col gap-0 p-0 sm:max-w-lg"
         showCloseButton={!pending}
         onInteractOutside={(e) => {
           if (pending) e.preventDefault()
@@ -148,7 +132,7 @@ export function EditSupplierSheet({
           if (pending) e.preventDefault()
         }}
       >
-        <SheetHeader>
+        <SheetHeader className="border-b px-4 py-4">
           <SheetTitle>Edit supplier</SheetTitle>
           <SheetDescription>Update details for this supplier.</SheetDescription>
         </SheetHeader>
@@ -157,7 +141,7 @@ export function EditSupplierSheet({
           onSubmit={handleSubmit}
           className="flex flex-1 flex-col overflow-y-auto"
         >
-          <div className="grid flex-1 auto-rows-min gap-6 px-4">
+          <div className="grid flex-1 auto-rows-min gap-6 px-4 py-4">
             <FieldGroup>
               <Field>
                 <FieldLabel htmlFor="edit-sup-name">Name</FieldLabel>
@@ -211,7 +195,7 @@ export function EditSupplierSheet({
               </Field>
             </FieldGroup>
 
-            {showOB && balanceLoaded && (
+            {showOB && !balanceLoading && (
               <SupplierOpeningBalanceSection
                 balance={balance}
                 removeBalance={removeBalance}

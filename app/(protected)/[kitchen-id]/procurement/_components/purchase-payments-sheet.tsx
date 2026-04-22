@@ -1,17 +1,13 @@
 'use client'
 
-import { useState, useTransition } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useKitchen } from '@/hooks/use-kitchen'
-import { createSupplierPayment } from '../_lib/payment-actions'
-import { PAYMENTS_QUERY_KEY } from '../_lib/queries'
+import { useQuery } from '@tanstack/react-query'
 import {
-  fetchPurchasePayments,
-  fetchActiveCashAccounts,
+  fetchPurchaseCreditSettlements,
+  fetchPurchaseOpenBalance,
+  fetchPurchasePaymentSettlements,
 } from '../_lib/client-queries'
 import type { Purchase } from './purchase-columns'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/spinner'
 import {
   Sheet,
@@ -20,19 +16,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import {
-  Field,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from '@/components/ui/field'
 import {
   Table,
   TableBody,
@@ -59,159 +42,174 @@ export function PurchasePaymentsSheet({
   open,
   onOpenChange,
 }: PurchasePaymentsSheetProps) {
-  const { kitchen, membership } = useKitchen()
-  const queryClient = useQueryClient()
-  const [cashAccountId, setCashAccountId] = useState('')
-  const [amount, setAmount] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [pending, startTransition] = useTransition()
-
-  const { data: payments, isLoading: paymentsLoading } = useQuery({
-    queryKey: ['purchase-payments', purchase.id],
-    queryFn: () => fetchPurchasePayments(purchase.id),
+  const { data: openBalance, isLoading: balanceLoading } = useQuery({
+    queryKey: ['purchase-open-balance', purchase.id],
+    queryFn: () => fetchPurchaseOpenBalance(purchase.id),
     enabled: open,
   })
 
-  const { data: cashAccounts } = useQuery({
-    queryKey: ['active-cash-accounts', kitchen.id],
-    queryFn: () => fetchActiveCashAccounts(kitchen.id),
+  const { data: paymentSettlements, isLoading: paymentSettlementsLoading } = useQuery({
+    queryKey: ['purchase-payment-settlements', purchase.id],
+    queryFn: () => fetchPurchasePaymentSettlements(purchase.id),
     enabled: open,
   })
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setError(null)
-
-    const amt = Number(amount)
-    if (!amount || Number.isNaN(amt) || amt <= 0)
-      return setError('Enter a valid payment amount.')
-    if (!cashAccountId) return setError('Select a cash account.')
-
-    startTransition(async () => {
-      try {
-        const result = await createSupplierPayment({
-          kitchen_id: kitchen.id,
-          reference_purchase_id: purchase.id,
-          supplier_id: purchase.supplier_id,
-          amount: amt,
-          settlement_account_id: cashAccountId,
-        })
-        if (result instanceof Error) return setError(result.message)
-        setAmount('')
-        setCashAccountId('')
-        queryClient.invalidateQueries({ queryKey: ['purchase-payments', purchase.id] })
-        queryClient.invalidateQueries({ queryKey: PAYMENTS_QUERY_KEY })
-      } catch {
-        setError('Something went wrong. Please try again.')
-      }
-    })
-  }
+  const { data: creditSettlements, isLoading: creditSettlementsLoading } = useQuery({
+    queryKey: ['purchase-credit-settlements', purchase.id],
+    queryFn: () => fetchPurchaseCreditSettlements(purchase.id),
+    enabled: open,
+  })
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="flex flex-col gap-0 p-0 sm:max-w-xl">
         <SheetHeader className="px-4 pb-4 pt-4">
-          <SheetTitle>Payments</SheetTitle>
+          <SheetTitle>Purchase settlements</SheetTitle>
           <SheetDescription>
             Purchase #{purchase.purchase_number} — {purchase.suppliers?.name ?? ''}
           </SheetDescription>
         </SheetHeader>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="flex-1 overflow-y-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="pl-4">Amount</TableHead>
-                  <TableHead>Cash account</TableHead>
-                  <TableHead>Paid by</TableHead>
-                  <TableHead>Date</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paymentsLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={4} className="h-12 text-center">
-                      <Spinner />
-                    </TableCell>
-                  </TableRow>
-                ) : (payments ?? []).length === 0 ? (
-                  <TableRow>
-                    <TableCell
-                      colSpan={4}
-                      className="h-24 text-center text-muted-foreground"
-                    >
-                      No payments yet.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  (payments ?? []).map((payment) => (
-                    <TableRow key={payment.id}>
-                      <TableCell className="pl-4 font-medium">
-                        {formatAmount(payment.amount)}
-                      </TableCell>
-                      <TableCell>
-                        {payment.settlement_account
-                          ? `${payment.settlement_account.code} · ${payment.settlement_account.name}`
-                          : '—'}
-                      </TableCell>
-                      <TableCell>
-                        {payment.paid_member?.profiles?.full_name ?? '—'}
-                      </TableCell>
-                      <TableCell>
-                        {new Date(payment.created_at).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                        })}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+          <div className="border-b px-4 py-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-sm text-muted-foreground">
+                Open balance:{' '}
+                <span className="font-medium text-foreground">
+                  {balanceLoading ? '…' : formatAmount(openBalance ?? 0)}
+                </span>
+              </span>
+              <span className="text-sm text-muted-foreground">
+                Payment allocations:{' '}
+                <span className="font-medium text-foreground">
+                  {paymentSettlements?.length ?? 0}
+                </span>
+              </span>
+              <span className="text-sm text-muted-foreground">
+                Credit allocations:{' '}
+                <span className="font-medium text-foreground">
+                  {creditSettlements?.length ?? 0}
+                </span>
+              </span>
+            </div>
           </div>
 
-          <div className="shrink-0 border-t px-4 py-4">
-            <h3 className="mb-3 text-sm font-medium">Add payment</h3>
-            <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-              <FieldGroup>
-                <Field>
-                  <FieldLabel htmlFor="pay-amount">Amount</FieldLabel>
-                  <Input
-                    id="pay-amount"
-                    type="number"
-                    inputMode="decimal"
-                    min="0.01"
-                    step="0.01"
-                    placeholder="0.00"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    disabled={pending}
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel>Cash account</FieldLabel>
-                  <Select value={cashAccountId} onValueChange={setCashAccountId} disabled={pending}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select account" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(cashAccounts ?? []).map((acc) => (
-                        <SelectItem key={acc.id} value={acc.id}>
-                          {acc.code} · {acc.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
-              </FieldGroup>
-              {error && <FieldError>{error}</FieldError>}
-              <Button type="submit" disabled={pending} size="sm" className="self-end min-w-28">
-                {pending && <Spinner data-icon="inline-start" />}
-                Record payment
-              </Button>
-            </form>
+          <div className="flex-1 overflow-y-auto">
+            <div className="border-b px-4 py-3">
+              <h3 className="mb-2 text-sm font-medium">Payment allocations</h3>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="pl-0">Allocated amount</TableHead>
+                    <TableHead>Payment total</TableHead>
+                    <TableHead>Settlement account</TableHead>
+                    <TableHead>Paid by</TableHead>
+                    <TableHead>Date</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paymentSettlementsLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="h-12 text-center">
+                        <Spinner />
+                      </TableCell>
+                    </TableRow>
+                  ) : (paymentSettlements ?? []).length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="h-16 pl-0 text-muted-foreground">
+                        No payment allocations yet.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    (paymentSettlements ?? []).map((settlement) => (
+                      <TableRow key={settlement.id}>
+                        <TableCell className="pl-0 font-medium">
+                          {formatAmount(settlement.amount)}
+                        </TableCell>
+                        <TableCell>
+                          {settlement.payment ? formatAmount(settlement.payment.amount) : '—'}
+                        </TableCell>
+                        <TableCell>
+                          {settlement.payment?.settlement_account
+                            ? `${settlement.payment.settlement_account.code} · ${settlement.payment.settlement_account.name}`
+                            : '—'}
+                        </TableCell>
+                        <TableCell>
+                          {settlement.payment?.paid_member?.profiles?.full_name ?? '—'}
+                        </TableCell>
+                        <TableCell>
+                          {settlement.payment
+                            ? new Date(settlement.payment.created_at).toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                              })
+                            : '—'}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className="px-4 py-3">
+              <h3 className="mb-2 text-sm font-medium">Credit allocations</h3>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="pl-0">Allocated amount</TableHead>
+                    <TableHead>Credit value</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Date</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {creditSettlementsLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="h-12 text-center">
+                        <Spinner />
+                      </TableCell>
+                    </TableRow>
+                  ) : (creditSettlements ?? []).length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="h-16 pl-0 text-muted-foreground">
+                        No credit allocations yet.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    (creditSettlements ?? []).map((settlement) => (
+                      <TableRow key={settlement.id}>
+                        <TableCell className="pl-0 font-medium">
+                          {formatAmount(settlement.amount)}
+                        </TableCell>
+                        <TableCell>
+                          {settlement.credit_note ? formatAmount(settlement.credit_note.credit_value) : '—'}
+                        </TableCell>
+                        <TableCell>
+                          {settlement.credit_note ? (
+                            <Badge variant={settlement.credit_note.status === 'settled' ? 'default' : 'secondary'}>
+                              {settlement.credit_note.status.replace('_', ' ')}
+                            </Badge>
+                          ) : (
+                            '—'
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {settlement.credit_note
+                            ? new Date(settlement.credit_note.created_at).toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                              })
+                            : '—'}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </div>
         </div>
       </SheetContent>

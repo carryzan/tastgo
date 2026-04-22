@@ -5,7 +5,6 @@ import type { ColumnDef, Row } from '@tanstack/react-table'
 import {
   CheckCheckIcon,
   PackageCheckIcon,
-  PencilIcon,
   ReceiptTextIcon,
   RotateCcwIcon,
   SendIcon,
@@ -15,6 +14,12 @@ import { Badge } from '@/components/ui/badge'
 import { getSelectColumn } from '@/components/data-table/data-table-select-column'
 import { DataTableRowActions } from '@/components/data-table/data-table-row-actions'
 import type { ColumnConfig, Permission } from '@/lib/types/data-table'
+
+export interface PurchaseAllocationEmbed {
+  id: string
+  amount: string | number
+  voided_at: string | null
+}
 
 export interface Purchase {
   id: string
@@ -34,6 +39,8 @@ export interface Purchase {
   suppliers: { id: string; name: string } | null
   created_member: { id: string; profiles: { full_name: string } | null } | null
   received_member: { id: string; profiles: { full_name: string } | null } | null
+  payment_allocations: PurchaseAllocationEmbed[] | null
+  credit_allocations: PurchaseAllocationEmbed[] | null
 }
 
 export const purchaseColumnConfigs: ColumnConfig[] = [
@@ -43,6 +50,8 @@ export const purchaseColumnConfigs: ColumnConfig[] = [
   { column: 'created_at', label: 'Created', type: 'date', sortable: true },
   { column: 'received_at', label: 'Received', type: 'date', sortable: true },
 ]
+
+
 
 const STATUS_VARIANTS: Record<string, 'default' | 'secondary' | 'outline'> = {
   draft: 'outline',
@@ -65,6 +74,7 @@ export function getPurchaseColumns(
     onReceive: (row: Row<Purchase>) => void
     onPayments: (row: Row<Purchase>) => void
     onCreateReturn: (row: Row<Purchase>) => void
+    onReassign: (row: Row<Purchase>) => void
   }
 ): ColumnDef<Purchase>[] {
   const showRowActions = true
@@ -74,16 +84,10 @@ export function getPurchaseColumns(
     return (
       <>
         {status === 'draft' && (
-          <>
-            <DropdownMenuItem onClick={() => callbacks.onEdit(row)}>
-              <PencilIcon />
-              Edit
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => callbacks.onMarkSent(row)}>
-              <SendIcon />
-              Mark as sent
-            </DropdownMenuItem>
-          </>
+          <DropdownMenuItem onClick={() => callbacks.onMarkSent(row)}>
+            <SendIcon />
+            Mark as sent
+          </DropdownMenuItem>
         )}
         {status === 'sent' && (
           <DropdownMenuItem onClick={() => callbacks.onReceive(row)}>
@@ -95,11 +99,15 @@ export function getPurchaseColumns(
           <>
             <DropdownMenuItem onClick={() => callbacks.onPayments(row)}>
               <ReceiptTextIcon />
-              Payments
+              Settlements
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => callbacks.onCreateReturn(row)}>
               <RotateCcwIcon />
               Create return
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => callbacks.onReassign(row)}>
+              <RotateCcwIcon />
+              Reassign supplier
             </DropdownMenuItem>
           </>
         )}
@@ -111,15 +119,19 @@ export function getPurchaseColumns(
     getSelectColumn<Purchase>(
       showRowActions
         ? {
-            renderRowEnd: (row) => (
-              <DataTableRowActions
-                row={row}
-                permissions={{ canEdit: false, canDelete: false }}
-                onEdit={() => {}}
-                onDelete={() => {}}
-                extraItems={extraItems}
-              />
-            ),
+            renderRowEnd: (row) => {
+              const canEditDraft = permissions.canEdit && row.original.status === 'draft'
+
+              return (
+                <DataTableRowActions
+                  row={row}
+                  permissions={{ canEdit: canEditDraft, canDelete: false }}
+                  onEdit={callbacks.onEdit}
+                  onDelete={() => {}}
+                  extraItems={extraItems}
+                />
+              )
+            },
           }
         : undefined
     ),
@@ -164,6 +176,24 @@ export function getPurchaseColumns(
       accessorKey: 'received_total',
       header: 'Received total',
       cell: ({ row }) => formatAmount(row.original.received_total),
+      enableSorting: false,
+    },
+    {
+      id: 'open_balance',
+      header: 'Open balance',
+      cell: ({ row }) => {
+        const { status, received_total, payment_allocations, credit_allocations } = row.original
+        if (status !== 'received' || received_total == null) return '—'
+        const total = typeof received_total === 'string' ? Number(received_total) : received_total
+        const paidSum = (payment_allocations ?? [])
+          .filter((a) => a.voided_at === null)
+          .reduce((s, a) => s + (typeof a.amount === 'string' ? Number(a.amount) : a.amount), 0)
+        const creditSum = (credit_allocations ?? [])
+          .filter((a) => a.voided_at === null)
+          .reduce((s, a) => s + (typeof a.amount === 'string' ? Number(a.amount) : a.amount), 0)
+        const open = total - paidSum - creditSum
+        return formatAmount(open < 0 ? 0 : open)
+      },
       enableSorting: false,
     },
     {

@@ -18,7 +18,7 @@ export interface ModifierGroup {
   is_active: boolean
   created_at: string
   brands: { id: string; name: string } | null
-  modifier_options: { id: string }[]
+  modifier_options: { id: string; is_active: boolean }[]
 }
 
 export const modifierGroupColumnConfigs: ColumnConfig[] = [
