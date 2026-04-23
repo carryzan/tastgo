@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useTransition, useEffect } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { useKitchen } from '@/hooks/use-kitchen'
 import { createClient } from '@/lib/supabase/client'
 import { createUOMConfig, updateUOMConfig } from '../_lib/uom-config-actions'
 import { Button } from '@/components/ui/button'
-import { Spinner } from '@/components/ui/spinner'
 import { Input } from '@/components/ui/input'
+import { Spinner } from '@/components/ui/spinner'
 import {
   Dialog,
   DialogClose,
@@ -76,46 +76,56 @@ export function UOMConfigDialog({
 
   useEffect(() => {
     if (!open) return
-    setLoading(true)
-    setError(null)
 
+    let cancelled = false
     const supabase = createClient()
-    supabase
-      .from('inventory_item_uom_configurations')
-      .select('*')
-      .eq('inventory_item_id', itemId)
-      .maybeSingle()
-      .then(({ data, error: fetchError }) => {
-        if (fetchError) {
-          setError(fetchError.message)
-          setLoading(false)
-          return
-        }
 
-        const config = data as UOMConfig | null
-        setExisting(config)
+    void Promise.resolve().then(async () => {
+      setLoading(true)
+      setError(null)
 
-        if (config) {
-          setPurchaseUomId(config.purchase_uom_id ?? '__none__')
-          setStorageUomId(config.storage_uom_id)
-          setRecipeUomId(config.recipe_uom_id)
-          setPurchaseToStorage(
-            config.purchase_to_storage_factor != null
-              ? String(config.purchase_to_storage_factor)
-              : ''
-          )
-          setStorageToRecipe(String(config.storage_to_recipe_factor))
-        } else {
-          const defaultId = uoms[0]?.id ?? ''
-          setPurchaseUomId('__none__')
-          setStorageUomId(defaultId)
-          setRecipeUomId(defaultId)
-          setPurchaseToStorage('')
-          setStorageToRecipe('1')
-        }
+      const { data, error: fetchError } = await supabase
+        .from('inventory_item_uom_configurations')
+        .select('*')
+        .eq('inventory_item_id', itemId)
+        .maybeSingle()
 
+      if (cancelled) return
+
+      if (fetchError) {
+        setError(fetchError.message)
         setLoading(false)
-      })
+        return
+      }
+
+      const config = data as UOMConfig | null
+      setExisting(config)
+
+      if (config) {
+        setPurchaseUomId(config.purchase_uom_id ?? '__none__')
+        setStorageUomId(config.storage_uom_id)
+        setRecipeUomId(config.recipe_uom_id)
+        setPurchaseToStorage(
+          config.purchase_to_storage_factor != null
+            ? String(config.purchase_to_storage_factor)
+            : ''
+        )
+        setStorageToRecipe(String(config.storage_to_recipe_factor))
+      } else {
+        const defaultId = uoms[0]?.id ?? ''
+        setPurchaseUomId('__none__')
+        setStorageUomId(defaultId)
+        setRecipeUomId(defaultId)
+        setPurchaseToStorage('')
+        setStorageToRecipe('1')
+      }
+
+      setLoading(false)
+    })
+
+    return () => {
+      cancelled = true
+    }
   }, [open, itemId, uoms])
 
   function handleOpenChange(next: boolean) {
@@ -136,7 +146,9 @@ export function UOMConfigDialog({
     }
 
     const hasPurchase = purchaseUomId !== '__none__'
-    const purchaseFactor = purchaseToStorage ? parseFloat(purchaseToStorage) : null
+    const purchaseFactor = purchaseToStorage
+      ? parseFloat(purchaseToStorage)
+      : null
 
     if (hasPurchase && (purchaseFactor == null || purchaseFactor <= 0)) {
       return setError(
@@ -154,16 +166,21 @@ export function UOMConfigDialog({
         if (existing) {
           const updates: Record<string, unknown> = {}
           const newPurchaseId = hasPurchase ? purchaseUomId : null
-          if (newPurchaseId !== existing.purchase_uom_id)
+          if (newPurchaseId !== existing.purchase_uom_id) {
             updates.purchase_uom_id = newPurchaseId
-          if (storageUomId !== existing.storage_uom_id)
+          }
+          if (storageUomId !== existing.storage_uom_id) {
             updates.storage_uom_id = storageUomId
-          if (recipeUomId !== existing.recipe_uom_id)
+          }
+          if (recipeUomId !== existing.recipe_uom_id) {
             updates.recipe_uom_id = recipeUomId
-          if (purchaseFactor !== existing.purchase_to_storage_factor)
+          }
+          if (purchaseFactor !== existing.purchase_to_storage_factor) {
             updates.purchase_to_storage_factor = purchaseFactor
-          if (recipeFactor !== existing.storage_to_recipe_factor)
+          }
+          if (recipeFactor !== existing.storage_to_recipe_factor) {
             updates.storage_to_recipe_factor = recipeFactor
+          }
 
           if (Object.keys(updates).length > 0) {
             const result = await updateUOMConfig(existing.id, updates)
@@ -291,7 +308,7 @@ export function UOMConfigDialog({
             {purchaseUomId !== '__none__' && (
               <Field>
                 <FieldLabel htmlFor="uom-p2s">
-                  Purchase → Storage Factor
+                  Purchase to Storage Factor
                 </FieldLabel>
                 <Input
                   id="uom-p2s"
@@ -311,7 +328,7 @@ export function UOMConfigDialog({
 
             <Field>
               <FieldLabel htmlFor="uom-s2r">
-                Storage → Recipe Factor
+                Storage to Recipe Factor
               </FieldLabel>
               <Input
                 id="uom-s2r"

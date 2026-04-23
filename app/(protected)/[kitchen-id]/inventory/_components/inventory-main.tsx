@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useTransition } from 'react'
 import { RulerIcon, TruckIcon } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import type { Row } from '@tanstack/react-table'
 import { useKitchen } from '@/hooks/use-kitchen'
 import { useServerTable } from '@/hooks/use-server-table'
@@ -23,6 +24,7 @@ import {
   INVENTORY_SELECT,
   INVENTORY_FROM,
 } from '../_lib/queries'
+import { deleteInventoryItem } from '../_lib/item-actions'
 import type { InventoryCategory } from '../_lib/inventory-categories'
 
 interface InventoryMainProps {
@@ -31,6 +33,7 @@ interface InventoryMainProps {
 
 export function InventoryMain({ initialCategories }: InventoryMainProps) {
   const { kitchen } = useKitchen()
+  const queryClient = useQueryClient()
 
   // TODO: derive from usePermission once permission strings are defined
   const permissions = useMemo<Permission>(
@@ -41,6 +44,8 @@ export function InventoryMain({ initialCategories }: InventoryMainProps) {
   const [addOpen, setAddOpen] = useState(false)
   const [editItem, setEditItem] = useState<InventoryItem | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<InventoryItem | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [deletePending, startDeleteTransition] = useTransition()
   const [uomConfigItem, setUomConfigItem] = useState<InventoryItem | null>(null)
   const [manageSuppliersItem, setManageSuppliersItem] = useState<InventoryItem | null>(null)
 
@@ -51,8 +56,6 @@ export function InventoryMain({ initialCategories }: InventoryMainProps) {
   const handleDelete = useCallback((row: Row<InventoryItem>) => {
     setDeleteTarget(row.original)
   }, [])
-
-  const getKitchenAssetUrl = useCallback((row: InventoryItem) => row.image_url, [])
 
   const extraItems = useCallback(
     (row: Row<InventoryItem>) => (
@@ -80,7 +83,7 @@ export function InventoryMain({ initialCategories }: InventoryMainProps) {
     [permissions, handleEdit, handleDelete, extraItems]
   )
 
-  const { table, isFetching, deleteMutation, search, setSearch } =
+  const { table, isFetching, search, setSearch } =
     useServerTable<InventoryItem>({
       queryKey: INVENTORY_QUERY_KEY,
       from: INVENTORY_FROM,
@@ -88,7 +91,6 @@ export function InventoryMain({ initialCategories }: InventoryMainProps) {
       columns,
       searchColumn: 'name',
       kitchenId: kitchen.id,
-      getKitchenAssetUrl,
     })
 
   return (
@@ -120,16 +122,32 @@ export function InventoryMain({ initialCategories }: InventoryMainProps) {
       <DataTableDeleteDialog
         open={deleteTarget !== null}
         onOpenChange={(open) => {
-          if (!open) setDeleteTarget(null)
+          if (!open) {
+            setDeleteTarget(null)
+            setDeleteError(null)
+          }
         }}
+        description={
+          deleteError
+            ? `This action cannot be undone. ${deleteError}`
+            : undefined
+        }
         onConfirm={() => {
           if (deleteTarget) {
-            deleteMutation.mutate(deleteTarget, {
-              onSuccess: () => setDeleteTarget(null),
+            startDeleteTransition(async () => {
+              const result = await deleteInventoryItem(kitchen.id, deleteTarget.id)
+              if (result instanceof Error) {
+                setDeleteError(result.message)
+                return
+              }
+
+              queryClient.invalidateQueries({ queryKey: INVENTORY_QUERY_KEY })
+              setDeleteTarget(null)
+              setDeleteError(null)
             })
           }
         }}
-        isLoading={deleteMutation.isPending}
+        isLoading={deletePending}
       />
       {uomConfigItem && (
         <UOMConfigDialog

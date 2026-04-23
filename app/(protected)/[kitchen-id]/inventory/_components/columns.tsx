@@ -22,7 +22,10 @@ export interface InventoryItem {
   is_active: boolean
   created_at: string
   updated_at: string
-  inventory_categories: { id: string; name: string } | null
+  category_name: string | null
+  storage_uom_abbreviation: string | null
+  current_quantity: string | number
+  stock_value: string | number
 }
 
 const CYCLE_COUNT_LABELS: Record<string, string> = {
@@ -35,15 +38,35 @@ const CYCLE_COUNT_LABELS: Record<string, string> = {
 
 export const inventoryColumnConfigs: ColumnConfig[] = [
   { column: 'name', label: 'Name', type: 'text', sortable: true },
+  { column: 'category_name', label: 'Category', type: 'text', sortable: true },
   { column: 'yield_percentage', label: 'Yield %', type: 'number', sortable: true },
   { column: 'par_level', label: 'Par Level', type: 'number', sortable: true },
   { column: 'min_level', label: 'Min Level', type: 'number', sortable: true },
   { column: 'max_level', label: 'Max Level', type: 'number', sortable: true },
   { column: 'cycle_count_frequency', label: 'Cycle Count', type: 'select', options: Object.keys(CYCLE_COUNT_LABELS) },
   { column: 'location_label', label: 'Location', type: 'text', sortable: true },
+  { column: 'current_quantity', label: 'Stock', type: 'number', sortable: true },
+  { column: 'stock_value', label: 'Value', type: 'number', sortable: true },
   { column: 'is_active', label: 'Active', type: 'boolean' },
   { column: 'created_at', label: 'Created', type: 'date', sortable: true },
 ]
+
+function formatNumber(value: string | number | null) {
+  if (value == null) return '—'
+  const n = Number(value)
+  if (Number.isNaN(n)) return '—'
+  return n.toLocaleString(undefined, { maximumFractionDigits: 4 })
+}
+
+function formatMoney(value: string | number | null) {
+  if (value == null) return '—'
+  const n = Number(value)
+  if (Number.isNaN(n)) return '—'
+  return n.toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 3,
+  })
+}
 
 export function getInventoryColumns(
   permissions: Permission,
@@ -91,10 +114,10 @@ export function getInventoryColumns(
       enableSorting: true,
     },
     {
-      id: 'category',
+      accessorKey: 'category_name',
       header: 'Category',
-      cell: ({ row }) => row.original.inventory_categories?.name ?? '—',
-      enableSorting: false,
+      cell: ({ row }) => row.original.category_name ?? '—',
+      enableSorting: true,
     },
     {
       accessorKey: 'yield_percentage',
@@ -136,6 +159,23 @@ export function getInventoryColumns(
       accessorKey: 'location_label',
       header: 'Location',
       cell: ({ row }) => row.original.location_label ?? '—',
+      enableSorting: true,
+    },
+    {
+      accessorKey: 'current_quantity',
+      header: 'Stock',
+      cell: ({ row }) => (
+        <span className="font-mono">
+          {formatNumber(row.original.current_quantity)}{' '}
+          {row.original.storage_uom_abbreviation ?? ''}
+        </span>
+      ),
+      enableSorting: true,
+    },
+    {
+      accessorKey: 'stock_value',
+      header: 'Value',
+      cell: ({ row }) => formatMoney(row.original.stock_value),
       enableSorting: true,
     },
     {

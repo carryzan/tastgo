@@ -82,8 +82,8 @@ export function getExpenseRecordColumns(callbacks: {
 
     return (
       <DropdownMenuItem
+        variant="destructive"
         onClick={() => callbacks.onReverse(row)}
-        className="text-destructive focus:text-destructive"
       >
         <RotateCcwIcon />
         Reverse
