@@ -4,6 +4,7 @@ import { MoreHorizontal } from 'lucide-react'
 import { useKitchen } from '@/hooks/use-kitchen'
 import { EditSource } from '@/components/layout/settings/edit-source'
 import { DeleteSource } from '@/components/layout/settings/delete-source'
+import { SourceAccountingConfig } from '@/components/layout/settings/source-accounting-config'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
@@ -29,11 +30,18 @@ interface Source {
   logo_url: string | null
   is_active: boolean
   created_at: string
+  settlement_mode: 'cash_now' | 'bank_now' | 'marketplace_receivable' | 'customer_receivable' | null
+  settlement_account_id: string | null
+  receivable_account_id: string | null
+  fee_expense_account_id: string | null
+  revenue_account_id: string | null
+  cogs_account_id: string | null
 }
 
 export function SourcesTab() {
   const { sources } = useKitchen()
   const [editSource, setEditSource] = useState<Source | null>(null)
+  const [accountingSource, setAccountingSource] = useState<Source | null>(null)
   const [deleteSource, setDeleteSource] = useState<Source | null>(null)
 
   return (
@@ -41,18 +49,19 @@ export function SourcesTab() {
       <div className="rounded-xl border overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead className="text-muted-foreground">Source</TableHead>
-              <TableHead className="text-muted-foreground">Type</TableHead>
-              <TableHead className="text-muted-foreground">Status</TableHead>
-              <TableHead className="text-muted-foreground">Created</TableHead>
-              <TableHead className="w-12" />
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="text-muted-foreground">Source</TableHead>
+                <TableHead className="text-muted-foreground">Type</TableHead>
+                <TableHead className="text-muted-foreground">Settlement</TableHead>
+                <TableHead className="text-muted-foreground">Status</TableHead>
+                <TableHead className="text-muted-foreground">Created</TableHead>
+                <TableHead className="w-12" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {sources.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-muted-foreground">
+                <TableCell colSpan={6} className="text-muted-foreground">
                   No sources found. Add your first source to get started.
                 </TableCell>
               </TableRow>
@@ -67,6 +76,14 @@ export function SourcesTab() {
                     {source.name}
                   </TableCell>
                   <TableCell className="capitalize">{source.type}</TableCell>
+                  <TableCell>
+                    {source.settlement_mode
+                      ? source.settlement_mode
+                          .split('_')
+                          .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+                          .join(' ')
+                      : 'Not configured'}
+                  </TableCell>
                   <TableCell>{source.is_active ? 'Active' : 'Inactive'}</TableCell>
                   <TableCell>
                     {new Date(source.created_at).toLocaleDateString(undefined, {
@@ -88,6 +105,9 @@ export function SourcesTab() {
                           <DropdownMenuItem onSelect={() => setEditSource(source)}>
                             Edit
                           </DropdownMenuItem>
+                          <DropdownMenuItem onSelect={() => setAccountingSource(source)}>
+                            Config
+                          </DropdownMenuItem>
                           <DropdownMenuItem variant="destructive" onSelect={() => setDeleteSource(source)}>
                             Delete
                           </DropdownMenuItem>
@@ -106,6 +126,13 @@ export function SourcesTab() {
           source={editSource}
           open={!!editSource}
           onOpenChange={(next) => { if (!next) setEditSource(null) }}
+        />
+      )}
+      {accountingSource && (
+        <SourceAccountingConfig
+          source={accountingSource}
+          open={!!accountingSource}
+          onOpenChange={(next) => { if (!next) setAccountingSource(null) }}
         />
       )}
       {deleteSource && (

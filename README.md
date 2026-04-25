@@ -2,7 +2,7 @@
 
 Private web app for **kitchen operations**: one Supabase-backed product where each **kitchen** is a workspace. Staff sign in, pick a kitchen, and work inside routes like `/[kitchen-id]/dashboard` and `/[kitchen-id]/inventory`.
 
-The product direction is end-to-end ops—orders, menu, inventory, production, procurement, stock counts, expenses, cash, staff, and reconciliation—with **permission-based navigation** so people only see what their role allows. Features ship incrementally; the repo currently centers on auth, kitchen context, and **inventory** (items, categories, units of measure), plus shared settings patterns.
+The product direction is end-to-end ops—orders, menu, inventory, production, procurement, stock counts, expenses, cash, staff, and settlement—with **permission-based navigation** so people only see what their role allows. Features ship incrementally; the repo currently centers on auth, kitchen context, and **inventory** (items, categories, units of measure), plus shared settings patterns.
 
 **Stack:** Next.js (App Router), Supabase (auth + Postgres), TanStack Query/Table where needed, Tailwind CSS and shadcn/ui.
 

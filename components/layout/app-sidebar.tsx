@@ -9,7 +9,7 @@ import {
   Van,
   ClipboardCheck,
   Receipt,
-  Scale,
+  Handshake,
   Users,
   Calculator,
 } from "lucide-react"
@@ -85,10 +85,10 @@ const NAV_ITEMS = [
     permission: "staff.read",
   },
   {
-    title: "Reconciliation",
-    segment: "reconciliation",
-    icon: Scale,
-    permission: "reconciliation.read",
+    title: "Settlement",
+    segment: "settlement",
+    icon: Handshake,
+    permission: "settlement.read",
   },
 ] as const
 
