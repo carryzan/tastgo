@@ -1,6 +1,7 @@
 "use client"
 
 import {
+  CirclePlus,
   LayoutDashboard,
   SquareMenu,
   Soup,
@@ -29,6 +30,12 @@ const NAV_ITEMS = [
     segment: "dashboard",
     icon: LayoutDashboard,
     permission: "kitchen.read",
+  },
+  {
+    title: "Point of Sale",
+    segment: "point-of-sale",
+    icon: CirclePlus,
+    permission: "orders.read",
   },
   {
     title: "Orders",
@@ -79,7 +86,7 @@ const NAV_ITEMS = [
     permission: "accounting.read",
   },
   {
-    title: "Staff & Scheduling",
+    title: "Staff Management",
     segment: "staff",
     icon: Users,
     permission: "staff.read",
