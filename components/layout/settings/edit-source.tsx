@@ -61,8 +61,12 @@ export function EditSource({ source, open, onOpenChange }: { source: Source; ope
     const form = e.currentTarget
     const formData = new FormData(form)
     const name = formData.get('name') as string
-    const type = formData.get('type') as string
+    const type = formData.get('type')
     if (!name) return
+    if (type !== 'online' && type !== 'offline') {
+      setError('Select a valid source type.')
+      return
+    }
 
     const exists = (sources as Source[]).some(
       (s) => s.id !== source.id && s.name.toLowerCase() === name.toLowerCase()
@@ -83,7 +87,7 @@ export function EditSource({ source, open, onOpenChange }: { source: Source; ope
           }
         }
 
-        const updates: { name?: string; type?: string; logo_url?: string | null } = {}
+        const updates: { name?: string; type?: 'online' | 'offline'; logo_url?: string | null } = {}
         if (name !== source.name) updates.name = name
         if (type !== source.type) updates.type = type
         if (logo_url !== undefined) updates.logo_url = logo_url

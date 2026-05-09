@@ -37,8 +37,11 @@ export function AddSource() {
     const form = e.currentTarget
     const formData = new FormData(form)
     const name = formData.get('name') as string
-    const type = formData.get('type') as string
+    const type = formData.get('type')
     if (!name) return
+    if (type !== 'online' && type !== 'offline') {
+      return setError('Select a valid source type.')
+    }
 
     if ((sources as { name: string }[]).some((s) => s.name.toLowerCase() === name.toLowerCase())) {
       return setError('A source with this name already exists.')

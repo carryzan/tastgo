@@ -36,15 +36,18 @@ const NONE = '__none__'
 
 type SettlementMode =
   | 'cash_now'
-  | 'bank_now'
   | 'marketplace_receivable'
+
+type SourceSettlementMode =
+  | SettlementMode
+  | 'bank_now'
   | 'customer_receivable'
 
 interface Source {
   id: string
   name: string
   type: string
-  settlement_mode: SettlementMode | null
+  settlement_mode: SourceSettlementMode | null
   settlement_account_id: string | null
   receivable_account_id: string | null
   fee_expense_account_id: string | null
@@ -67,9 +70,7 @@ interface ChartAccount {
 
 const MODE_LABELS: Record<SettlementMode, string> = {
   cash_now: 'Cash Now',
-  bank_now: 'Bank Now',
   marketplace_receivable: 'Marketplace Receivable',
-  customer_receivable: 'Customer Receivable',
 }
 
 async function fetchChartAccounts(kitchenId: string): Promise<ChartAccount[]> {
@@ -91,6 +92,10 @@ function toSelectValue(value: string | null) {
 
 function fromSelectValue(value: string) {
   return value === NONE ? null : value
+}
+
+function toSupportedMode(mode: SourceSettlementMode | null) {
+  return mode === 'cash_now' || mode === 'marketplace_receivable' ? mode : ''
 }
 
 function AccountSelect({
@@ -133,7 +138,7 @@ export function SourceAccountingConfig({
   const { kitchen } = useKitchen()
   const router = useRouter()
   const [mode, setMode] = useState<SettlementMode | ''>(
-    source.settlement_mode ?? ''
+    toSupportedMode(source.settlement_mode)
   )
   const [settlementAccountId, setSettlementAccountId] = useState(
     toSelectValue(source.settlement_account_id)
@@ -171,9 +176,8 @@ export function SourceAccountingConfig({
     [accounts]
   )
 
-  const usesSettlementAccount = mode === 'cash_now' || mode === 'bank_now'
-  const usesReceivable =
-    mode === 'marketplace_receivable' || mode === 'customer_receivable'
+  const usesSettlementAccount = mode === 'cash_now'
+  const usesReceivable = mode === 'marketplace_receivable'
   const usesPlatformFees = mode === 'marketplace_receivable'
 
   function handleOpenChange(next: boolean) {
