@@ -4,6 +4,7 @@ import type { ColumnDef, Row } from '@tanstack/react-table'
 import { EyeIcon } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Badge } from '@/components/ui/badge'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { getSelectColumn } from '@/components/data-table/data-table-select-column'
 import { DataTableRowActions } from '@/components/data-table/data-table-row-actions'
 import type { ColumnConfig } from '@/lib/types/data-table'
@@ -13,12 +14,20 @@ import {
   formatDateTime,
   kitchenStatusLabel,
   paymentStatusLabel,
-} from '@/components/shared/order-format'
+  settlementModeLabel,
+} from '@/lib/order-format'
 
 export const orderColumnConfigs: ColumnConfig[] = [
   { column: 'order_number', label: 'Order #', type: 'number', sortable: true },
+  { column: 'source_order_code', label: 'Source Code', type: 'text' },
   { column: 'brands.name', label: 'Brand', type: 'text', sortable: true },
   { column: 'sources.name', label: 'Source', type: 'text', sortable: true },
+  {
+    column: 'sources.settlement_mode',
+    label: 'Settlement',
+    type: 'select',
+    options: ['cash_now', 'marketplace_receivable'],
+  },
   {
     column: 'kitchen_status',
     label: 'Kitchen Status',
@@ -34,6 +43,28 @@ export const orderColumnConfigs: ColumnConfig[] = [
   { column: 'net_amount', label: 'Net', type: 'number', sortable: true },
   { column: 'created_at', label: 'Created', type: 'date', sortable: true },
 ]
+
+function LogoCell({
+  name,
+  logoUrl,
+}: {
+  name: string | null | undefined
+  logoUrl?: string | null
+}) {
+  const display = name?.trim() ? name : '-'
+  const initials =
+    display !== '-' ? display.slice(0, 2).toUpperCase() : '?'
+
+  return (
+    <div className="flex min-w-0 max-w-[200px] items-center gap-2">
+      <Avatar size="sm">
+        <AvatarImage src={logoUrl ?? undefined} alt="" />
+        <AvatarFallback className="text-[10px]">{initials}</AvatarFallback>
+      </Avatar>
+      <span className="min-w-0 truncate">{display}</span>
+    </div>
+  )
+}
 
 function StatusBadge({
   value,
@@ -79,22 +110,27 @@ export function getOrderColumns(callbacks: {
     }),
     {
       accessorKey: 'order_number',
-      header: 'Order',
+      header: 'Order #',
       cell: ({ row }) => (
-        <div className="flex flex-col gap-0.5">
-          <span className="font-medium">#{row.original.order_number}</span>
-          <span className="text-xs text-muted-foreground">
-            {row.original.source_order_code ?? row.original.id.slice(0, 8)}
-          </span>
-        </div>
+        <span className="font-medium">#{row.original.order_number}</span>
       ),
       enableSorting: true,
+    },
+    {
+      accessorKey: 'source_order_code',
+      header: 'Source Code',
+      cell: ({ row }) => row.original.source_order_code ?? '-',
     },
     {
       id: 'brands.name',
       accessorFn: (row) => row.brands?.name ?? '',
       header: 'Brand',
-      cell: ({ row }) => row.original.brands?.name ?? '-',
+      cell: ({ row }) => (
+        <LogoCell
+          name={row.original.brands?.name}
+          logoUrl={row.original.brands?.logo_url}
+        />
+      ),
       enableSorting: true,
     },
     {
@@ -102,14 +138,29 @@ export function getOrderColumns(callbacks: {
       accessorFn: (row) => row.sources?.name ?? '',
       header: 'Source',
       cell: ({ row }) => (
-        <div className="flex flex-col gap-0.5">
-          <span>{row.original.sources?.name ?? '-'}</span>
-          <span className="text-xs text-muted-foreground">
-            {row.original.sources?.settlement_mode ?? '-'}
-          </span>
-        </div>
+        <LogoCell
+          name={row.original.sources?.name}
+          logoUrl={row.original.sources?.logo_url}
+        />
       ),
       enableSorting: true,
+    },
+    {
+      id: 'sources.settlement_mode',
+      accessorFn: (row) => row.sources?.settlement_mode ?? '',
+      header: 'Settlement',
+      cell: ({ row }) => {
+        const mode = row.original.sources?.settlement_mode ?? null
+        if (mode === null) {
+          return <span className="text-muted-foreground">-</span>
+        }
+        return (
+          <StatusBadge
+            value={settlementModeLabel(mode)}
+            tone={mode === 'cash_now' ? 'success' : 'warning'}
+          />
+        )
+      },
     },
     {
       accessorKey: 'kitchen_status',

@@ -31,7 +31,7 @@ import {
   kitchenStatusLabel,
   orderActionLabel,
   paymentStatusLabel,
-} from '@/components/shared/order-format'
+} from '@/lib/order-format'
 import { DiscountDialog, OrderActionDialog } from './order-action-dialog'
 
 interface OrderDetailSheetProps {
@@ -46,6 +46,12 @@ interface OrderDetailSheetProps {
 type ActionDialogState =
   | { type: OrderActionType; itemMode?: boolean; title?: string }
   | null
+
+function settlementShortLabel(mode: string | null | undefined): string {
+  if (mode === 'marketplace_receivable') return 'MR'
+  if (mode === 'cash_now') return 'Cash'
+  return '-'
+}
 
 function InfoRow({
   label,
@@ -70,7 +76,7 @@ function OrderStatusBadges({ order }: { order: OrderDetail | OrderRow }) {
         {paymentStatusLabel(order.payment_status)}
       </Badge>
       {order.sources?.settlement_mode ? (
-        <Badge variant="outline">{order.sources.settlement_mode}</Badge>
+        <Badge variant="outline">{settlementShortLabel(order.sources.settlement_mode)}</Badge>
       ) : null}
     </div>
   )
@@ -102,8 +108,10 @@ export function OrderDetailSheet({
   const isPreparing = detail?.kitchen_status === 'preparing'
   const isReady = detail?.kitchen_status === 'ready'
   const settlementMode = detail?.sources?.settlement_mode ?? null
+  const isMRPaid =
+    settlementMode === 'marketplace_receivable' && detail?.payment_status === 'paid'
   const canDiscount = Boolean(canUpdate && detail && !isCompleted)
-  const canVoid = Boolean(canAction && detail && !isCompleted)
+  const canVoid = Boolean(canAction && detail && !isCompleted && !isMRPaid)
   const canRefund = Boolean(
     canAction &&
       detail &&
@@ -112,7 +120,11 @@ export function OrderDetailSheet({
       settlementMode === 'cash_now'
   )
   const canComp = Boolean(
-    canAction && detail && isCompleted && settlementMode === 'marketplace_receivable'
+    canAction &&
+      detail &&
+      isCompleted &&
+      settlementMode === 'marketplace_receivable' &&
+      detail.payment_status !== 'paid'
   )
 
   const totals = useMemo(() => {
@@ -170,7 +182,10 @@ export function OrderDetailSheet({
                     </div>
                     <div className="md:pl-3">
                       <InfoRow label="Source code" value={detail.source_order_code ?? '-'} />
-                      <InfoRow label="Settlement" value={detail.sources?.settlement_mode ?? '-'} />
+                      <InfoRow
+                        label="Settlement"
+                        value={settlementShortLabel(detail.sources?.settlement_mode)}
+                      />
                       <InfoRow label="Settlement batch" value={detail.online_settlement_id ? 'Linked' : '-'} />
                     </div>
                   </div>

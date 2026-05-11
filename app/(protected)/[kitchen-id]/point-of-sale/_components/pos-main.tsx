@@ -4,11 +4,12 @@ import { useMemo, useState, useTransition } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   CheckCircle2Icon,
-  CircleDollarSignIcon,
-  GiftIcon,
   MinusIcon,
   MoreHorizontalIcon,
+  NotebookPenIcon,
+  PercentIcon,
   PlusIcon,
+  PrinterIcon,
   ReceiptTextIcon,
   TrashIcon,
   WalletCardsIcon,
@@ -29,6 +30,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { FieldError } from '@/components/ui/field'
@@ -42,7 +44,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { useKitchen } from '@/hooks/use-kitchen'
 import {
@@ -68,14 +71,24 @@ import type {
   PosModifierGroup,
   PosModifierOption,
 } from '@/lib/types/orders'
-import { formatAmount, formatDateTime, kitchenStatusLabel } from '@/components/shared/order-format'
+import {
+  formatAmount,
+  formatDateTime,
+  orderActionLabel,
+  paymentStatusLabel,
+} from '@/lib/order-format'
+import { cn } from '@/lib/utils'
 import { DiscountDialog, OrderActionDialog } from '../../orders/_components/order-action-dialog'
+import { CartDiscountDialog, type CartDiscount } from './cart-discount-dialog'
+import { OrderCard, OrderPanelHeader } from './order-card'
+import { printOrderReceipt } from '../_lib/print/printer'
 import {
   fetchActiveAssetAccounts,
   fetchDrawerSessions,
   fetchDrawerTransactions,
   fetchPosCatalog,
   fetchPosOrders,
+  getBrowserLocalDayBounds,
   type PosCatalog,
 } from '../_lib/client-queries'
 
@@ -133,8 +146,11 @@ function isPosOrderFilter(value: string): value is PosOrderFilter {
   return value === 'all' || value === 'online' || value === 'offline'
 }
 
+type CardButtonTone = 'default' | 'primary' | 'destructive' | 'destructive-strong'
+
 function CardButton({
   active,
+  tone = 'default',
   title,
   subtitle,
   meta,
@@ -142,26 +158,85 @@ function CardButton({
   disabled,
 }: {
   active?: boolean
+  tone?: CardButtonTone
   title: string
   subtitle?: string
   meta?: string
   onClick: () => void
   disabled?: boolean
 }) {
+  const surfaceClass =
+    tone === 'primary'
+      ? 'border-primary bg-primary/5 hover:bg-primary/10'
+      : tone === 'destructive'
+        ? 'border-destructive/70 bg-destructive/5 text-destructive hover:bg-destructive/10'
+        : tone === 'destructive-strong'
+          ? 'border-destructive bg-destructive/15 text-destructive hover:bg-destructive/20'
+          : active
+            ? 'border-primary bg-primary/5'
+            : 'border-border bg-background hover:bg-muted/50'
+
+  const subtitleMuted =
+    tone === 'destructive' || tone === 'destructive-strong'
+      ? 'text-destructive/75'
+      : 'text-muted-foreground'
+
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`flex min-h-20 w-full flex-col items-start justify-between rounded-lg border p-3 text-left text-sm transition-colors disabled:opacity-50 ${
+      className={cn(
+        'flex min-h-20 w-full flex-col items-start justify-between rounded-lg border p-3 text-left text-sm transition-colors disabled:opacity-50',
+        surfaceClass
+      )}
+    >
+      <span className="font-medium">{title}</span>
+      {subtitle ? <span className={cn('text-xs', subtitleMuted)}>{subtitle}</span> : null}
+      {meta ? (
+        <span
+          className={cn(
+            'mt-2 text-xs font-medium',
+            tone === 'destructive' || tone === 'destructive-strong' ? 'text-destructive' : undefined
+          )}
+        >
+          {meta}
+        </span>
+      ) : null}
+    </button>
+  )
+}
+
+function CatalogChipPick({
+  active,
+  label,
+  logoUrl,
+  onClick,
+}: {
+  active: boolean
+  label: string
+  logoUrl: string | null | undefined
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        'flex max-w-44 shrink-0 items-center gap-2 rounded-md border px-2 py-1.5 text-left text-xs transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring',
         active
           ? 'border-primary bg-primary/5'
           : 'border-border bg-background hover:bg-muted/50'
-      }`}
+      )}
     >
-      <span className="font-medium">{title}</span>
-      {subtitle ? <span className="text-xs text-muted-foreground">{subtitle}</span> : null}
-      {meta ? <span className="mt-2 text-xs font-medium">{meta}</span> : null}
+      <Avatar size="sm">
+        <AvatarImage src={logoUrl ?? undefined} alt="" />
+        <AvatarFallback className="text-[10px]">
+          {label.slice(0, 2).toUpperCase()}
+        </AvatarFallback>
+      </Avatar>
+      <span className="min-w-0 truncate font-medium">{label}</span>
     </button>
   )
 }
@@ -169,19 +244,25 @@ function CardButton({
 function DetailPanel({
   title,
   subtitle,
+  header,
   children,
   footer,
 }: {
-  title: string
+  title?: string
   subtitle?: React.ReactNode
+  header?: React.ReactNode
   children: React.ReactNode
   footer?: React.ReactNode
 }) {
   return (
-    <aside className="flex min-h-0 flex-col border-t bg-background lg:border-t-0 lg:border-l">
+    <aside className="flex min-h-0 min-w-0 flex-col border-t bg-background lg:border-t-0 lg:border-l">
       <div className="shrink-0 border-b px-4 py-3">
-        <h2 className="text-sm font-medium">{title}</h2>
-        {subtitle ? <div className="mt-1 text-xs text-muted-foreground">{subtitle}</div> : null}
+        {header ?? (
+          <>
+            <h2 className="text-sm font-medium">{title}</h2>
+            {subtitle ? <div className="mt-1 text-xs text-muted-foreground">{subtitle}</div> : null}
+          </>
+        )}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">{children}</div>
       {footer ? <div className="shrink-0 border-t px-4 py-3">{footer}</div> : null}
@@ -371,10 +452,10 @@ export function PosMain() {
   const [cartLines, setCartLines] = useState<PosCartLine[]>([])
   const [cartCombos, setCartCombos] = useState<PosCartCombo[]>([])
   const [notes, setNotes] = useState('')
+  const [sourceOrderCode, setSourceOrderCode] = useState('')
   const [cartError, setCartError] = useState<string | null>(null)
   const [modifierItem, setModifierItem] = useState<PosCatalogItem | null>(null)
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null)
-  const [selectedDrawerId, setSelectedDrawerId] = useState<string | null>(null)
   const [drawerDialog, setDrawerDialog] = useState<DrawerDialogType | null>(null)
   const [orderAction, setOrderAction] = useState<{
     type: OrderActionType
@@ -382,15 +463,22 @@ export function PosMain() {
     title?: string
   } | null>(null)
   const [discountOpen, setDiscountOpen] = useState(false)
+  const [cartDiscount, setCartDiscount] = useState<CartDiscount | null>(null)
+  const [cartDiscountOpen, setCartDiscountOpen] = useState(false)
   const [statusError, setStatusError] = useState<string | null>(null)
+  const [printError, setPrintError] = useState<string | null>(null)
+  const [printing, setPrinting] = useState(false)
   const [submitting, startSubmitTransition] = useTransition()
   const [statusPending, startStatusTransition] = useTransition()
 
   const canCreateOrder = permissions.has('orders.create')
   const canUpdateOrder = permissions.has('orders.update')
+  const canApplyDiscount = permissions.has('orders.update')
   const canActionOrder = permissions.has('orders.action')
   const canCreateDrawer = permissions.has('drawer.create')
   const canUpdateDrawer = permissions.has('drawer.update')
+
+  const posDay = getBrowserLocalDayBounds()
 
   const { data: catalog, isLoading: catalogLoading } = useQuery({
     queryKey: [...POS_CATALOG_KEY, kitchen.id],
@@ -398,13 +486,13 @@ export function PosMain() {
   })
 
   const { data: orders } = useQuery({
-    queryKey: [...POS_ORDERS_KEY, kitchen.id],
-    queryFn: () => fetchPosOrders(kitchen.id),
+    queryKey: [...POS_ORDERS_KEY, kitchen.id, posDay.dayKey],
+    queryFn: () => fetchPosOrders(kitchen.id, posDay),
   })
 
   const { data: drawerSessions } = useQuery({
-    queryKey: [...POS_DRAWERS_KEY, kitchen.id],
-    queryFn: () => fetchDrawerSessions(kitchen.id),
+    queryKey: [...POS_DRAWERS_KEY, kitchen.id, posDay.dayKey],
+    queryFn: () => fetchDrawerSessions(kitchen.id, posDay),
   })
 
   const selectedBrand = useMemo(
@@ -436,12 +524,8 @@ export function PosMain() {
     [drawerSessions]
   )
   const selectedDrawer = useMemo(
-    () =>
-      drawerSessions?.find((session) => session.id === selectedDrawerId) ??
-      openDrawer ??
-      drawerSessions?.[0] ??
-      null,
-    [drawerSessions, openDrawer, selectedDrawerId]
+    () => openDrawer ?? drawerSessions?.[0] ?? null,
+    [drawerSessions, openDrawer]
   )
   const filteredOrders = useMemo(
     () => orders?.filter((order) => matchesOrderFilter(order, orderFilter)) ?? [],
@@ -464,6 +548,8 @@ export function PosMain() {
     setCartLines([])
     setCartCombos([])
     setNotes('')
+    setSourceOrderCode('')
+    setCartDiscount(null)
     setCartError(null)
   }
 
@@ -548,6 +634,7 @@ export function PosMain() {
         brandId: selectedBrand.id,
         sourceId: selectedSource.id,
         notes: notes.trim() || null,
+        sourceOrderCode: sourceOrderCode.trim() || null,
         items: cartLines.map((line) => ({
           menu_item_id: line.menu_item_id,
           recipe_version_id: line.recipe_version_id,
@@ -562,6 +649,14 @@ export function PosMain() {
           combo_id: combo.combo_id,
           quantity: combo.quantity,
         })),
+        discount: cartDiscount
+          ? {
+              type: cartDiscount.type,
+              amount: cartDiscount.type === 'fixed' ? cartDiscount.value : null,
+              percentage: cartDiscount.type === 'percentage' ? cartDiscount.value : null,
+              reason: cartDiscount.reason,
+            }
+          : null,
       })
       if (result instanceof Error) {
         setCartError(result.message)
@@ -572,7 +667,32 @@ export function PosMain() {
       await queryClient.invalidateQueries({ queryKey: POS_DRAWERS_KEY })
       setSelectedOrderId(result)
       setView('orders')
+
+      try {
+        const order = await fetchOrderDetail(result)
+        await printOrderReceipt({
+          order,
+          kitchen: { name: kitchen.name, location: kitchen.location },
+        })
+      } catch {
+        // silent — print failures should not block the order flow
+      }
     })
+  }
+
+  async function printReceipt(order: OrderDetail) {
+    setPrintError(null)
+    setPrinting(true)
+    try {
+      await printOrderReceipt({
+        order,
+        kitchen: { name: kitchen.name, location: kitchen.location },
+      })
+    } catch (error) {
+      setPrintError(error instanceof Error ? error.message : 'Failed to print.')
+    } finally {
+      setPrinting(false)
+    }
   }
 
   function moveOrderStatus(order: OrderDetail, nextStatus: 'ready' | 'completed') {
@@ -653,7 +773,7 @@ export function PosMain() {
         )}
       </SiteHeader>
 
-      <div className="grid min-h-0 flex-1 lg:grid-cols-[2fr_1fr]">
+      <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1.5fr)_minmax(20rem,1fr)]">
         {view === 'new' ? (
           <>
             <main className="min-h-0 overflow-y-auto px-4 py-4">
@@ -685,15 +805,20 @@ export function PosMain() {
               lines={cartLines}
               combos={cartCombos}
               notes={notes}
+              sourceOrderCode={sourceOrderCode}
+              discount={cartDiscount}
               error={cartError}
               pending={submitting}
               canSubmit={canCreateOrder}
+              canDiscount={canApplyDiscount}
               onNotes={setNotes}
+              onSourceOrderCode={setSourceOrderCode}
               onSubmit={submitOrder}
               onLineQty={updateLineQty}
               onComboQty={updateComboQty}
               onRemoveLine={(key) => setCartLines((prev) => prev.filter((line) => line.key !== key))}
               onRemoveCombo={(key) => setCartCombos((prev) => prev.filter((combo) => combo.key !== key))}
+              onOpenDiscount={() => setCartDiscountOpen(true)}
             />
           </>
         ) : view === 'orders' ? (
@@ -710,17 +835,21 @@ export function PosMain() {
               canAction={canActionOrder}
               statusError={statusError}
               statusPending={statusPending}
+              printError={printError}
+              printing={printing}
               onStatus={moveOrderStatus}
               onAction={setOrderAction}
               onDiscount={() => setDiscountOpen(true)}
+              onPrint={printReceipt}
             />
           </>
         ) : (
           <>
-            <DrawerCards
-              sessions={drawerSessions ?? []}
-              selectedId={selectedDrawer?.id ?? null}
-              onSelect={setSelectedDrawerId}
+            <CashDrawerActions
+              session={selectedDrawer}
+              canCreate={canCreateDrawer}
+              canUpdate={canUpdateDrawer}
+              onDialog={setDrawerDialog}
             />
             <DrawerPanel
               kitchenId={kitchen.id}
@@ -741,6 +870,13 @@ export function PosMain() {
           if (!next) setModifierItem(null)
         }}
         onAdd={addItem}
+      />
+
+      <CartDiscountDialog
+        open={cartDiscountOpen}
+        onOpenChange={setCartDiscountOpen}
+        value={cartDiscount}
+        onApply={setCartDiscount}
       />
 
       {selectedOrderDetail && orderAction ? (
@@ -804,29 +940,36 @@ function NewOrderWorkspace({
 }) {
   return (
     <div className="space-y-6">
-      <CatalogSection title="Brands">
-        {catalog.brands.map((brand) => (
-          <CardButton
-            key={brand.id}
-            active={brand.id === selectedBrandId}
-            title={brand.name}
-            onClick={() => onBrand(brand.id)}
-          />
-        ))}
-      </CatalogSection>
-
-      <CatalogSection title="Sources">
-        {catalog.sources.map((source) => (
-          <CardButton
-            key={source.id}
-            active={source.id === selectedSourceId}
-            title={source.name}
-            subtitle={source.type}
-            meta={source.settlement_mode ?? undefined}
-            onClick={() => onSource(source.id)}
-          />
-        ))}
-      </CatalogSection>
+      <div className="space-y-4">
+        <section>
+          <h2 className="mb-2 text-sm font-medium">Brands</h2>
+          <div className="flex min-w-0 flex-nowrap items-center gap-2 overflow-x-auto pb-0.5">
+            {catalog.brands.map((brand) => (
+              <CatalogChipPick
+                key={brand.id}
+                active={brand.id === selectedBrandId}
+                label={brand.name}
+                logoUrl={brand.logo_url}
+                onClick={() => onBrand(brand.id)}
+              />
+            ))}
+          </div>
+        </section>
+        <section>
+          <h2 className="mb-2 text-sm font-medium">Sources</h2>
+          <div className="flex min-w-0 flex-nowrap items-center gap-2 overflow-x-auto pb-0.5">
+            {catalog.sources.map((source) => (
+              <CatalogChipPick
+                key={source.id}
+                active={source.id === selectedSourceId}
+                label={source.name}
+                logoUrl={source.logo_url}
+                onClick={() => onSource(source.id)}
+              />
+            ))}
+          </div>
+        </section>
+      </div>
 
       <CatalogSection title="Menus">
         {menusForBrand.length === 0 ? (
@@ -897,34 +1040,60 @@ function CatalogSection({
   )
 }
 
+function formatCartDiscountDisplay(discount: CartDiscount, subtotal: number): string {
+  if (discount.type === 'percentage') {
+    const amount = (subtotal * discount.value) / 100
+    return `-${formatAmount(amount)} (${discount.value}%)`
+  }
+  return `-${formatAmount(discount.value)}`
+}
+
+function cartDiscountAmount(discount: CartDiscount | null, subtotal: number): number {
+  if (!discount) return 0
+  if (discount.type === 'percentage') return (subtotal * discount.value) / 100
+  return discount.value
+}
+
 function CartPanel({
   lines,
   combos,
   notes,
+  sourceOrderCode,
+  discount,
   error,
   pending,
   canSubmit,
+  canDiscount,
   onNotes,
+  onSourceOrderCode,
   onSubmit,
   onLineQty,
   onComboQty,
   onRemoveLine,
   onRemoveCombo,
+  onOpenDiscount,
 }: {
   lines: PosCartLine[]
   combos: PosCartCombo[]
   notes: string
+  sourceOrderCode: string
+  discount: CartDiscount | null
   error: string | null
   pending: boolean
   canSubmit: boolean
+  canDiscount: boolean
   onNotes: (value: string) => void
+  onSourceOrderCode: (value: string) => void
   onSubmit: () => void
   onLineQty: (key: string, delta: number) => void
   onComboQty: (key: string, delta: number) => void
   onRemoveLine: (key: string) => void
   onRemoveCombo: (key: string) => void
+  onOpenDiscount: () => void
 }) {
-  const total = cartTotal(lines, combos)
+  const subtotal = cartTotal(lines, combos)
+  const discountAmt = cartDiscountAmount(discount, subtotal)
+  const total = subtotal - discountAmt
   const empty = lines.length === 0 && combos.length === 0
 
   return (
@@ -935,18 +1104,32 @@ function CartPanel({
         <div className="space-y-3">
           {error ? <FieldError>{error}</FieldError> : null}
           <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Total</span>
-            <span className="text-base font-semibold">{formatAmount(total)}</span>
+            <span className="font-medium">Total</span>
+            <span className="text-sm font-medium text-muted-foreground tabular-nums">{formatAmount(total)}</span>
           </div>
-          <Button
-            type="button"
-            className="w-full"
-            onClick={onSubmit}
-            disabled={pending || !canSubmit || empty}
-          >
-            {pending ? <Spinner data-icon="inline-start" /> : <ReceiptTextIcon />}
-            Submit order
-          </Button>
+          <div className="flex items-center gap-2">
+            {canDiscount ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="icon"
+                className="shrink-0"
+                onClick={onOpenDiscount}
+                aria-label="Add discount"
+              >
+                <PercentIcon />
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              className="min-w-0 flex-1"
+              onClick={onSubmit}
+              disabled={pending || !canSubmit || empty}
+            >
+              {pending ? <Spinner data-icon="inline-start" /> : <ReceiptTextIcon />}
+              Submit order
+            </Button>
+          </div>
         </div>
       }
     >
@@ -991,6 +1174,36 @@ function CartPanel({
               placeholder="Optional"
             />
           </div>
+          <div className="grid gap-2">
+            <Label htmlFor="pos-source-order-code">Source order code</Label>
+            <Input
+              id="pos-source-order-code"
+              value={sourceOrderCode}
+              onChange={(event) => onSourceOrderCode(event.target.value)}
+              placeholder="Optional"
+            />
+          </div>
+          {discount ? (
+            <div className="space-y-2 pt-1">
+              <h3 className="text-sm font-medium text-muted-foreground">Transaction summary</h3>
+              <div className="grid gap-2 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-medium">Subtotal</span>
+                  <span className="font-medium tabular-nums text-muted-foreground">{formatAmount(subtotal)}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-medium">Discount</span>
+                  <span className="font-medium tabular-nums text-muted-foreground">
+                    {formatCartDiscountDisplay(discount, subtotal)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-medium">Total</span>
+                  <span className="font-medium tabular-nums text-muted-foreground">{formatAmount(total)}</span>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
       )}
     </DetailPanel>
@@ -1051,22 +1264,16 @@ function OrderCards({
   onSelect: (id: string) => void
 }) {
   return (
-    <main className="min-h-0 overflow-y-auto px-4 py-4">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-medium">Orders</h2>
-        <span className="text-xs text-muted-foreground">{orders.length} records</span>
-      </div>
-      <div className="grid gap-2 xl:grid-cols-2">
+    <main className="min-h-0 min-w-0 overflow-y-auto px-4 py-4">
+      <div className="flex flex-col gap-2">
         {orders.length === 0 ? (
           <p className="text-sm text-muted-foreground">No orders yet.</p>
         ) : (
           orders.map((order) => (
-            <CardButton
+            <OrderCard
               key={order.id}
+              order={order}
               active={order.id === selectedId}
-              title={`#${order.order_number}`}
-              subtitle={`${order.brands?.name ?? '-'} · ${order.sources?.name ?? '-'}`}
-              meta={`${kitchenStatusLabel(order.kitchen_status)} · ${formatAmount(order.net_amount)}`}
               onClick={() => onSelect(order.id)}
             />
           ))
@@ -1076,6 +1283,49 @@ function OrderCards({
   )
 }
 
+/** Tag / pill row: no track, selected = secondary pill, unselected = text only (matches segmented “Guests / Members” style). */
+const posOrderDetailTagTabListClassName = cn(
+  'h-auto min-h-0 w-full flex-wrap justify-start gap-2 !bg-transparent p-0 !shadow-none',
+  'group-data-horizontal/tabs:h-auto'
+)
+
+/** `text-sm`; no shadow (including active). */
+const posOrderDetailTagTabTriggerClassName = cn(
+  'relative !h-auto min-h-0 !flex-none shrink-0 rounded-full border-0 px-2.5 py-1 text-sm font-medium',
+  '!shadow-none data-active:!shadow-none',
+  'bg-transparent text-muted-foreground hover:text-foreground',
+  'data-active:bg-secondary data-active:text-secondary-foreground',
+  'dark:data-active:bg-secondary dark:data-active:text-secondary-foreground',
+  'after:hidden'
+)
+
+/** Qty chips: normal radius, fixed min width so columns align with modifier rows. */
+const posOrderDetailQtyBadgeClassName = cn(
+  'rounded-md min-h-5 min-w-[2.25rem] justify-center px-2 py-0.5 text-xs font-medium tabular-nums shadow-none'
+)
+
+function formatQtyInteger(value: string | number): string {
+  const n = typeof value === 'string' ? Number(value) : value
+  if (Number.isNaN(n)) return '-'
+  return Math.round(n).toLocaleString('en-US', { maximumFractionDigits: 0 })
+}
+
+function formatOrderTabDiscountDisplay(detail: OrderDetail): string {
+  const n = Number(detail.discount_amount)
+  if (Number.isNaN(n)) return '-'
+  const magnitude = Math.abs(n)
+  const formattedAbs = formatAmount(magnitude)
+  const amountText = magnitude === 0 ? formattedAbs : `-${formattedAbs}`
+
+  const pctRows = detail.order_discounts.filter(
+    (row) => row.type === 'percentage' && row.percentage != null
+  )
+  if (pctRows.length === 0 || magnitude === 0) return amountText
+
+  const pctPart = pctRows.map((row) => `${formatAmount(row.percentage!)}%`).join(', ')
+  return `${amountText} (${pctPart})`
+}
+
 function PosOrderPanel({
   order,
   fallback,
@@ -1083,9 +1333,12 @@ function PosOrderPanel({
   canAction,
   statusError,
   statusPending,
+  printError,
+  printing,
   onStatus,
   onAction,
   onDiscount,
+  onPrint,
 }: {
   order: OrderDetail | null
   fallback: OrderRow | null
@@ -1093,9 +1346,12 @@ function PosOrderPanel({
   canAction: boolean
   statusError: string | null
   statusPending: boolean
+  printError: string | null
+  printing: boolean
   onStatus: (order: OrderDetail, next: 'ready' | 'completed') => void
   onAction: (state: { type: OrderActionType; itemMode?: boolean; title?: string }) => void
   onDiscount: () => void
+  onPrint: (order: OrderDetail) => void
 }) {
   const detail = order
   const display = order ?? fallback
@@ -1105,20 +1361,108 @@ function PosOrderPanel({
   const canComp =
     Boolean(detail && canAction && isCompleted && detail.sources?.settlement_mode === 'marketplace_receivable')
 
+  const hasMoreMenuActions = Boolean(
+    (canUpdate && !isCompleted) ||
+      (canAction && !isCompleted) ||
+      canRefund ||
+      canComp
+  )
+
+  const hasLeadMenuActions =
+    (canUpdate && !isCompleted) || (canAction && !isCompleted)
+
   return (
     <DetailPanel
-      title={display ? `Order #${display.order_number}` : 'Order details'}
-      subtitle={display ? `${display.sources?.name ?? '-'} · ${kitchenStatusLabel(display.kitchen_status)}` : undefined}
+      header={display ? <OrderPanelHeader order={display} /> : undefined}
+      title={display ? undefined : 'Order details'}
       footer={
         detail ? (
           <div className="space-y-2">
             {statusError ? <FieldError>{statusError}</FieldError> : null}
-            <div className="flex flex-wrap justify-end gap-2">
+            {printError ? <FieldError>{printError}</FieldError> : null}
+            <div className="flex items-center gap-2">
+              {hasMoreMenuActions ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="icon"
+                      className="shrink-0"
+                      aria-label="More actions"
+                    >
+                      <MoreHorizontalIcon />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-max min-w-0">
+                    {canUpdate && !isCompleted ? (
+                      <DropdownMenuItem onClick={onDiscount}>Discount</DropdownMenuItem>
+                    ) : null}
+                    {canAction && !isCompleted ? (
+                      <DropdownMenuItem
+                        variant="destructive"
+                        onClick={() => onAction({ type: 'void' })}
+                      >
+                        Void
+                      </DropdownMenuItem>
+                    ) : null}
+                    {canRefund ? (
+                      <>
+                        {hasLeadMenuActions ? <DropdownMenuSeparator /> : null}
+                        <DropdownMenuItem
+                          onClick={() => onAction({ type: 'refund', title: 'Full refund' })}
+                        >
+                          Full refund
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            onAction({ type: 'refund', itemMode: true, title: 'Partial refund' })
+                          }
+                        >
+                          Partial refund
+                        </DropdownMenuItem>
+                      </>
+                    ) : null}
+                    {canComp ? (
+                      <>
+                        {hasLeadMenuActions || canRefund ? (
+                          <DropdownMenuSeparator />
+                        ) : null}
+                        <DropdownMenuItem onClick={() => onAction({ type: 'full_comp' })}>
+                          Full comp
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            onAction({
+                              type: 'partial_comp',
+                              itemMode: true,
+                              title: 'Partial comp',
+                            })
+                          }
+                        >
+                          Partial comp
+                        </DropdownMenuItem>
+                      </>
+                    ) : null}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
+              <Button
+                type="button"
+                variant="secondary"
+                size="icon"
+                className="shrink-0"
+                aria-label="Print receipt"
+                onClick={() => onPrint(detail)}
+                disabled={printing}
+              >
+                {printing ? <Spinner /> : <PrinterIcon />}
+              </Button>
               {canUpdate && detail.kitchen_status === 'preparing' ? (
                 <Button
                   type="button"
-                  variant="outline"
-                  size="sm"
+                  variant="default"
+                  className="min-w-0 flex-1"
                   onClick={() => onStatus(detail, 'ready')}
                   disabled={statusPending}
                 >
@@ -1129,74 +1473,14 @@ function PosOrderPanel({
               {canUpdate && detail.kitchen_status === 'ready' ? (
                 <Button
                   type="button"
-                  size="sm"
+                  variant="default"
+                  className="min-w-0 flex-1"
                   onClick={() => onStatus(detail, 'completed')}
                   disabled={statusPending}
                 >
                   <CheckCircle2Icon />
                   Complete
                 </Button>
-              ) : null}
-              {canUpdate && !isCompleted ? (
-                <Button type="button" variant="outline" size="sm" onClick={onDiscount}>
-                  Discount
-                </Button>
-              ) : null}
-              {canAction && !isCompleted ? (
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => onAction({ type: 'void' })}
-                >
-                  Void
-                </Button>
-              ) : null}
-              {canRefund ? (
-                <>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onAction({ type: 'refund', title: 'Full refund' })}
-                  >
-                    <CircleDollarSignIcon />
-                    Full refund
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      onAction({ type: 'refund', itemMode: true, title: 'Partial refund' })
-                    }
-                  >
-                    Partial refund
-                  </Button>
-                </>
-              ) : null}
-              {canComp ? (
-                <>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onAction({ type: 'full_comp' })}
-                  >
-                    <GiftIcon />
-                    Full comp
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      onAction({ type: 'partial_comp', itemMode: true, title: 'Partial comp' })
-                    }
-                  >
-                    Partial comp
-                  </Button>
-                </>
               ) : null}
             </div>
           </div>
@@ -1210,94 +1494,254 @@ function PosOrderPanel({
           <Spinner />
         </div>
       ) : (
-        <div className="space-y-4">
-          <div className="grid gap-2 text-sm">
-            <InfoLine label="Brand" value={detail.brands?.name ?? '-'} />
-            <InfoLine label="Source" value={detail.sources?.name ?? '-'} />
-            <InfoLine label="Payment" value={detail.payment_status} />
-            <InfoLine label="Net" value={formatAmount(detail.net_amount)} />
-            <InfoLine label="Created" value={formatDateTime(detail.created_at)} />
-          </div>
-          <div className="space-y-2">
-            <h3 className="text-sm font-medium">Items</h3>
-            <div className="divide-y rounded-lg border">
-              {detail.order_items.map((item) => (
-                <div key={item.id} className="flex items-center justify-between gap-3 px-3 py-2">
-                  <div>
-                    <p className="text-sm">{item.menu_item?.name ?? item.id.slice(0, 8)}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Qty {formatAmount(item.quantity)}
-                    </p>
-                  </div>
-                  <p className="text-sm font-medium">{formatAmount(item.line_total)}</p>
+        <Tabs defaultValue="order" className="w-full">
+          <TabsList className={posOrderDetailTagTabListClassName}>
+            <TabsTrigger value="order" className={posOrderDetailTagTabTriggerClassName}>
+              Order
+            </TabsTrigger>
+            <TabsTrigger value="more" className={posOrderDetailTagTabTriggerClassName}>
+              More
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="order" className="mt-3 space-y-4">
+            {detail.notes ? (
+              <div className="rounded-lg bg-secondary p-3 space-y-1.5">
+                <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  <NotebookPenIcon className="size-3.5" />
+                  Note
                 </div>
-              ))}
-            </div>
-          </div>
-          <div className="space-y-2">
-            <h3 className="text-sm font-medium">Actions</h3>
-            <div className="divide-y rounded-lg border">
-              {detail.order_actions.length === 0 ? (
-                <p className="p-3 text-center text-sm text-muted-foreground">No actions.</p>
+                <p className="whitespace-pre-wrap text-sm">"{detail.notes}"</p>
+              </div>
+            ) : null}
+
+            <div className="space-y-2">
+              {detail.order_items.length === 0 && detail.order_combos.length === 0 ? (
+                <p className="py-3 text-center text-sm text-muted-foreground">No line items.</p>
               ) : (
-                detail.order_actions.map((action) => (
-                  <div key={action.id} className="flex items-center justify-between gap-3 px-3 py-2">
-                    <p className="text-sm">{action.type}</p>
-                    <p className="text-sm font-medium">{formatAmount(action.action_amount)}</p>
-                  </div>
-                ))
+                <>
+                  {detail.order_items.map((item) => (
+                    <div key={item.id} className="flex gap-2 py-2">
+                      <Badge variant="secondary" className={posOrderDetailQtyBadgeClassName}>
+                        {formatQtyInteger(item.quantity)}
+                      </Badge>
+                      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm leading-snug">
+                              {item.menu_item?.name ?? item.id.slice(0, 8)}
+                            </p>
+                            {item.pricing_source === 'combo_allocated' ? (
+                              <p className="mt-0.5 text-xs text-muted-foreground">Combo allocated</p>
+                            ) : null}
+                          </div>
+                          <p className="shrink-0 text-sm font-medium tabular-nums text-muted-foreground">
+                            {formatAmount(item.line_total)}
+                          </p>
+                        </div>
+                        {item.order_item_modifiers.map((modifier) => (
+                          <div
+                            key={modifier.id}
+                            className="flex items-start justify-between gap-3"
+                          >
+                            <div className="flex min-w-0 items-start gap-2">
+                              <Badge variant="secondary" className={posOrderDetailQtyBadgeClassName}>
+                                {formatQtyInteger(modifier.quantity)}
+                              </Badge>
+                              <p className="min-w-0 flex-1 text-xs leading-snug text-muted-foreground">
+                                {modifier.modifier_option?.name ?? modifier.modifier_option_id}
+                              </p>
+                            </div>
+                            <p className="shrink-0 text-xs font-medium tabular-nums text-muted-foreground">
+                              {formatAmount(modifier.price_impact)}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  {detail.order_combos.map((combo) => (
+                    <div key={combo.id} className="py-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex min-w-0 flex-1 items-start gap-2">
+                          <Badge variant="secondary" className={posOrderDetailQtyBadgeClassName}>
+                            {formatQtyInteger(combo.quantity)}
+                          </Badge>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm leading-snug">{combo.combo_name_snapshot}</p>
+                            <p className="text-xs text-muted-foreground">Combo</p>
+                          </div>
+                        </div>
+                        <p className="shrink-0 text-sm font-medium tabular-nums text-muted-foreground">
+                          {formatAmount(combo.total_price)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </>
               )}
             </div>
-          </div>
-        </div>
+
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium text-muted-foreground">Transaction summary</h3>
+              <div className="grid gap-2 text-sm">
+                <InfoLine tone="value-muted" label="Subtotal" value={formatAmount(detail.gross_amount)} />
+                <InfoLine tone="value-muted" label="Discount" value={formatOrderTabDiscountDisplay(detail)} />
+                <InfoLine tone="value-muted" label="Total" value={formatAmount(detail.net_amount)} />
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="more" className="mt-3 space-y-4">
+            <div className="grid gap-2 text-sm">
+              <InfoLine label="Brand" value={detail.brands?.name ?? '-'} />
+              <InfoLine
+                label="Source"
+                value={
+                  detail.sources ? (
+                    <span>
+                      {detail.sources.name}
+                      {detail.sources.type ? (
+                        <span className="text-muted-foreground"> · {detail.sources.type}</span>
+                      ) : null}
+                    </span>
+                  ) : (
+                    '-'
+                  )
+                }
+              />
+              {detail.sources?.settlement_mode ? (
+                <InfoLine
+                  label="Settlement"
+                  value={
+                    detail.sources.settlement_mode === 'cash_now'
+                      ? 'Cash now'
+                      : 'Marketplace receivable'
+                  }
+                />
+              ) : null}
+              {detail.source_order_code ? (
+                <InfoLine label="Source order" value={detail.source_order_code} />
+              ) : null}
+              <InfoLine label="Payment" value={paymentStatusLabel(detail.payment_status)} />
+              <InfoLine label="Created" value={formatDateTime(detail.created_at)} />
+              {detail.created_member?.profiles?.full_name ? (
+                <InfoLine label="Created by" value={detail.created_member.profiles.full_name} />
+              ) : null}
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium text-muted-foreground">Discounts</h3>
+              <div className="divide-y rounded-lg border">
+                {detail.order_discounts.length === 0 ? (
+                  <p className="p-3 text-center text-sm text-muted-foreground">No discounts.</p>
+                ) : (
+                  detail.order_discounts.map((row) => {
+                    const itemLabel =
+                      row.order_item_id &&
+                      detail.order_items.find((i) => i.id === row.order_item_id)?.menu_item?.name
+                    const valueLabel =
+                      row.type === 'percentage' && row.percentage != null
+                        ? `${formatAmount(row.percentage)}%`
+                        : formatAmount(row.amount)
+                    return (
+                      <div key={row.id} className="flex flex-col gap-0.5 px-3 py-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm">{row.reason ?? 'Discount'}</p>
+                          <p className="text-sm font-medium">{valueLabel}</p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+                          <span className="capitalize">{row.type}</span>
+                          {itemLabel ? <span>· {itemLabel}</span> : null}
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium text-muted-foreground">Actions</h3>
+              <div className="divide-y rounded-lg border">
+                {detail.order_actions.length === 0 ? (
+                  <p className="p-3 text-center text-sm text-muted-foreground">No actions.</p>
+                ) : (
+                  detail.order_actions.map((action) => (
+                    <div key={action.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                      <p className="text-sm">{orderActionLabel(action.type)}</p>
+                      <p className="text-sm font-medium">{formatAmount(action.action_amount)}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </TabsContent>
+        </Tabs>
       )}
     </DetailPanel>
   )
 }
 
-function InfoLine({ label, value }: { label: string; value: React.ReactNode }) {
+function InfoLine({
+  label,
+  value,
+  tone = 'muted',
+}: {
+  label: string
+  value: React.ReactNode
+  tone?: 'muted' | 'primary' | 'value-muted'
+}) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="text-right font-medium">{value}</span>
+      <span className={tone === 'primary' ? 'text-primary' : tone === 'value-muted' ? undefined : 'text-muted-foreground'}>
+        {label}
+      </span>
+      <span
+        className={cn(
+          'text-right font-medium tabular-nums',
+          tone === 'primary' ? 'text-primary' : tone === 'value-muted' ? 'text-muted-foreground' : undefined
+        )}
+      >
+        {value}
+      </span>
     </div>
   )
 }
 
-function DrawerCards({
-  sessions,
-  selectedId,
-  onSelect,
+function CashDrawerActions({
+  session,
+  canCreate,
+  canUpdate,
+  onDialog,
 }: {
-  sessions: DrawerSessionSummary[]
-  selectedId: string | null
-  onSelect: (id: string) => void
+  session: DrawerSessionSummary | null
+  canCreate: boolean
+  canUpdate: boolean
+  onDialog: (dialog: DrawerDialogType | null) => void
 }) {
-  const ordered = [...sessions].sort((a, b) => {
-    if (a.status !== b.status) return a.status === 'open' ? -1 : 1
-    return new Date(b.opened_at).getTime() - new Date(a.opened_at).getTime()
-  })
-
   return (
     <main className="min-h-0 overflow-y-auto px-4 py-4">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-medium">Cash Drawer</h2>
-        <span className="text-xs text-muted-foreground">{sessions.length} sessions</span>
       </div>
-      <div className="grid gap-2 xl:grid-cols-2">
-        {ordered.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No drawer sessions yet.</p>
+      <div className="grid grid-cols-2 gap-2">
+        {session?.status === 'open' && canUpdate ? (
+          <>
+            <CardButton tone="primary" title="Cash in" onClick={() => onDialog('cash_in')} />
+            <CardButton tone="destructive" title="Cash out" onClick={() => onDialog('cash_out')} />
+            <CardButton tone="destructive-strong" title="Close drawer" onClick={() => onDialog('close')} />
+          </>
+        ) : session?.status === 'closed' && canUpdate ? (
+          <div className="col-span-2">
+            <CardButton title="Reopen drawer" onClick={() => onDialog('reopen')} />
+          </div>
+        ) : !session && canCreate ? (
+          <div className="col-span-2">
+            <CardButton tone="primary" title="Open drawer" onClick={() => onDialog('open')} />
+          </div>
         ) : (
-          ordered.map((session) => (
-            <CardButton
-              key={session.id}
-              active={session.id === selectedId}
-              title={session.drawer_account ? `${session.drawer_account.code} · ${session.drawer_account.name}` : session.id.slice(0, 8)}
-              subtitle={formatDateTime(session.opened_at)}
-              meta={`${session.status} · expected ${formatAmount(session.expected_closing_balance)}`}
-              onClick={() => onSelect(session.id)}
-            />
-          ))
+          <p className="col-span-2 text-sm text-muted-foreground">No actions available.</p>
         )}
       </div>
     </main>
@@ -1346,34 +1790,6 @@ function DrawerPanel({
       <DetailPanel
         title={session ? 'Drawer session' : 'Cash drawer'}
         subtitle={session ? `${session.status} · ${formatDateTime(session.opened_at)}` : undefined}
-        footer={
-          session?.status === 'open' ? (
-            <div className="flex flex-wrap justify-end gap-2">
-              {canUpdate ? (
-                <>
-                  <Button type="button" variant="outline" size="sm" onClick={() => onDialog('cash_in')}>
-                    Cash in
-                  </Button>
-                  <Button type="button" variant="outline" size="sm" onClick={() => onDialog('cash_out')}>
-                    Cash out
-                  </Button>
-                  <Button type="button" variant="destructive" size="sm" onClick={() => onDialog('close')}>
-                    Close
-                  </Button>
-                </>
-              ) : null}
-            </div>
-          ) : session?.status === 'closed' && canUpdate ? (
-            <Button type="button" variant="outline" size="sm" onClick={() => onDialog('reopen')}>
-              Reopen
-            </Button>
-          ) : !session && canCreate ? (
-            <Button type="button" className="w-full" onClick={() => onDialog('open')}>
-              <WalletCardsIcon />
-              Open drawer
-            </Button>
-          ) : null
-        }
       >
         {!session ? (
           <EmptyState

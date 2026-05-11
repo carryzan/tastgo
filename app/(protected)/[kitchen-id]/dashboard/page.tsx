@@ -1,15 +1,28 @@
+import { dehydrate, HydrationBoundary } from '@tanstack/react-query'
 import { SiteHeader } from '@/components/layout/site-header'
+import { DashboardMain } from './_components/dashboard-main'
+import { DashboardMemberAvatars } from './_components/dashboard-member-avatars'
+import { prefetchDashboard } from './_lib/prefetch'
 
-export default function DashboardPage() {
+export default async function DashboardPage({
+  params,
+}: {
+  params: Promise<{ 'kitchen-id': string }>
+}) {
+  const { 'kitchen-id': kitchenId } = await params
+  const queryClient = await prefetchDashboard(kitchenId)
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <SiteHeader title="Dashboard">
-      </SiteHeader>
-      <main className="flex flex-1 flex-col gap-4 px-4 py-10">
-        <div className="flex flex-col gap-2">
-          <h1 className="text-2xl font-semibold">Dashboard</h1>
-          <p className="text-muted-foreground">Protected route — session OK.</p>
+        <div className="ml-auto shrink-0">
+          <DashboardMemberAvatars />
         </div>
+      </SiteHeader>
+      <main className="flex flex-1 flex-col gap-4 px-4 py-4">
+        <HydrationBoundary state={dehydrate(queryClient)}>
+          <DashboardMain kitchenId={kitchenId} />
+        </HydrationBoundary>
       </main>
     </div>
   )

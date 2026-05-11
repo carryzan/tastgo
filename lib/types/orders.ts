@@ -7,6 +7,7 @@ export type SourceSettlementMode = 'cash_now' | 'marketplace_receivable'
 export interface NamedReference {
   id: string
   name: string
+  logo_url?: string | null
 }
 
 export interface AccountReference {
@@ -49,8 +50,10 @@ export interface OrderRow {
     name: string
     type: string
     settlement_mode: SourceSettlementMode | null
+    logo_url?: string | null
   } | null
   created_member?: MemberReference | null
+  order_actions?: { type: OrderActionType }[] | null
 }
 
 export interface OrderModifierLine {
@@ -172,12 +175,14 @@ export interface PosCartCombo {
 export interface PosCatalogBrand {
   id: string
   name: string
+  logo_url: string | null
 }
 
 export interface PosCatalogSource {
   id: string
   name: string
   type: string
+  logo_url: string | null
   settlement_mode: SourceSettlementMode | null
   settlement_account_id: string | null
 }

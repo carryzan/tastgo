@@ -24,12 +24,21 @@ interface CreatePosOrderComboInput {
   quantity: number
 }
 
+interface CreatePosOrderDiscount {
+  type: DiscountType
+  amount?: number | null
+  percentage?: number | null
+  reason?: string | null
+}
+
 interface CreatePosOrderInput {
   brandId: string
   sourceId: string
   notes?: string | null
+  sourceOrderCode?: string | null
   items: CreatePosOrderItemInput[]
   combos: CreatePosOrderComboInput[]
+  discount?: CreatePosOrderDiscount | null
 }
 
 interface OrderActionItemInput {
@@ -67,6 +76,7 @@ export async function createPosOrder(
     p_brand_id: input.brandId,
     p_source_id: input.sourceId,
     p_notes: input.notes ?? null,
+    p_source_order_code: input.sourceOrderCode ?? null,
     p_items: input.items.map((item) => ({
       menu_item_id: item.menu_item_id,
       recipe_version_id: item.recipe_version_id,
@@ -81,6 +91,10 @@ export async function createPosOrder(
       combo_id: combo.combo_id,
       quantity: combo.quantity,
     })),
+    p_discount_type: input.discount?.type ?? null,
+    p_discount_amount: input.discount?.type === 'fixed' ? (input.discount.amount ?? null) : null,
+    p_discount_percentage: input.discount?.type === 'percentage' ? (input.discount.percentage ?? null) : null,
+    p_discount_reason: input.discount?.reason ?? null,
   })
 
   if (error) return new Error(error.message)

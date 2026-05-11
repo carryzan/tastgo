@@ -67,13 +67,13 @@ export async function fetchPosCatalog(kitchenId: string): Promise<PosCatalog> {
     await Promise.all([
       supabase
         .from('brands')
-        .select('id, name')
+        .select('id, name, logo_url')
         .eq('kitchen_id', kitchenId)
         .eq('is_active', true)
         .order('name'),
       supabase
         .from('sources')
-        .select('id, name, type, settlement_mode, settlement_account_id')
+        .select('id, name, type, logo_url, settlement_mode, settlement_account_id')
         .eq('kitchen_id', kitchenId)
         .eq('is_active', true)
         .in('settlement_mode', ['cash_now', 'marketplace_receivable'])
@@ -173,14 +173,38 @@ export async function fetchPosCatalog(kitchenId: string): Promise<PosCatalog> {
 }
 
 const ORDER_CARD_SELECT =
-  '*, brands!brand_id(id, name), sources!source_id(id, name, type, settlement_mode), created_member:kitchen_members!created_by(id, profiles(full_name))'
+  '*, brands!brand_id(id, name, logo_url), sources!source_id(id, name, type, settlement_mode, logo_url), created_member:kitchen_members!created_by(id, profiles(full_name)), order_actions(type)'
 
-export async function fetchPosOrders(kitchenId: string): Promise<OrderRow[]> {
+/** Browser-local calendar day (POS device clock). Used for “today” filters in Supabase. */
+export interface PosLocalDayBounds {
+  /** Stable key for React Query, e.g. `2026-05-10` */
+  dayKey: string
+  dayStart: string
+  dayEnd: string
+}
+
+export function getBrowserLocalDayBounds(now = new Date()): PosLocalDayBounds {
+  const dayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
+  return {
+    dayKey,
+    dayStart: start.toISOString(),
+    dayEnd: end.toISOString(),
+  }
+}
+
+export async function fetchPosOrders(
+  kitchenId: string,
+  bounds: PosLocalDayBounds
+): Promise<OrderRow[]> {
   const supabase = createClient()
   const { data, error } = await supabase
     .from('orders')
     .select(ORDER_CARD_SELECT)
     .eq('kitchen_id', kitchenId)
+    .gte('created_at', bounds.dayStart)
+    .lte('created_at', bounds.dayEnd)
     .order('created_at', { ascending: false })
     .limit(80)
 
@@ -188,22 +212,48 @@ export async function fetchPosOrders(kitchenId: string): Promise<OrderRow[]> {
   return (data ?? []) as unknown as OrderRow[]
 }
 
+const DRAWER_SESSION_CARD_SELECT =
+  '*, opened_member:kitchen_members!opened_by(id, profiles(full_name)), closed_member:kitchen_members!closed_by(id, profiles(full_name)), reopened_member:kitchen_members!reopened_by(id, profiles(full_name)), drawer_account:chart_of_accounts!drawer_account_id(id, code, name)'
+
 export async function fetchDrawerSessions(
-  kitchenId: string
+  kitchenId: string,
+  bounds: PosLocalDayBounds
 ): Promise<DrawerSessionSummary[]> {
   const supabase = createClient()
-  const { data, error } = await supabase
-    .from('cash_drawer_sessions')
-    .select(
-      '*, opened_member:kitchen_members!opened_by(id, profiles(full_name)), closed_member:kitchen_members!closed_by(id, profiles(full_name)), reopened_member:kitchen_members!reopened_by(id, profiles(full_name)), drawer_account:chart_of_accounts!drawer_account_id(id, code, name)'
-    )
-    .eq('kitchen_id', kitchenId)
-    .order('status', { ascending: false })
-    .order('opened_at', { ascending: false })
-    .limit(50)
+  const [openedTodayResult, openSessionsResult] = await Promise.all([
+    supabase
+      .from('cash_drawer_sessions')
+      .select(DRAWER_SESSION_CARD_SELECT)
+      .eq('kitchen_id', kitchenId)
+      .gte('opened_at', bounds.dayStart)
+      .lte('opened_at', bounds.dayEnd)
+      .order('status', { ascending: false })
+      .order('opened_at', { ascending: false })
+      .limit(50),
+    supabase
+      .from('cash_drawer_sessions')
+      .select(DRAWER_SESSION_CARD_SELECT)
+      .eq('kitchen_id', kitchenId)
+      .eq('status', 'open')
+      .order('opened_at', { ascending: false })
+      .limit(10),
+  ])
 
-  if (error) throw new Error(error.message)
-  return (data ?? []) as unknown as DrawerSessionSummary[]
+  if (openedTodayResult.error) throw new Error(openedTodayResult.error.message)
+  if (openSessionsResult.error) throw new Error(openSessionsResult.error.message)
+
+  const byId = new Map<string, DrawerSessionSummary>()
+  for (const row of openedTodayResult.data ?? []) {
+    byId.set(row.id, row as unknown as DrawerSessionSummary)
+  }
+  for (const row of openSessionsResult.data ?? []) {
+    byId.set(row.id, row as unknown as DrawerSessionSummary)
+  }
+
+  return [...byId.values()].sort((a, b) => {
+    if (a.status !== b.status) return a.status === 'open' ? -1 : 1
+    return new Date(b.opened_at).getTime() - new Date(a.opened_at).getTime()
+  })
 }
 
 export async function fetchDrawerTransactions(

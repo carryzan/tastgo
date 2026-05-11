@@ -34,7 +34,7 @@ import {
   TableRow,
 } from '@/components/data-table/data-table-primitives'
 import { ORDERS_QUERY_KEY } from '../_lib/queries'
-import { formatAmount, orderActionLabel } from '@/components/shared/order-format'
+import { formatAmount, orderActionLabel } from '@/lib/order-format'
 
 interface OrderActionDialogProps {
   open: boolean

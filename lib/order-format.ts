@@ -2,6 +2,7 @@ import type {
   OrderActionType,
   OrderKitchenStatus,
   OrderPaymentStatus,
+  SourceSettlementMode,
 } from '@/lib/types/orders'
 
 export function formatAmount(value: string | number | null | undefined) {
@@ -50,4 +51,13 @@ export function orderActionLabel(type: OrderActionType) {
     refund: 'Refund',
   }
   return labels[type]
+}
+
+export function settlementModeLabel(mode: SourceSettlementMode | null): string {
+  if (mode === null) return '-'
+  const labels: Record<SourceSettlementMode, string> = {
+    cash_now: 'Cash Now',
+    marketplace_receivable: 'Marketplace Receivable',
+  }
+  return labels[mode]
 }
