@@ -76,31 +76,45 @@ export async function updateSession(request: NextRequest) {
 
     // 1. try the cookie first — fast path, no DB query (skip on /no-kitchen so a refresh
     //    re-queries after the user is invited; cookie may be absent or stale)
+    let shouldClearLastKitchenCookie = false
+
     if (!isNoKitchenPage) {
       const lastKitchenId = request.cookies.get(LAST_KITCHEN_COOKIE)?.value
 
       if (lastKitchenId) {
-        url.pathname = `/${lastKitchenId}/dashboard`
-        const response = NextResponse.redirect(url)
-        copyAuthCookies(supabaseResponse, response)
-        return response
+        if (KITCHEN_ID_PATH_SEGMENT.test(lastKitchenId)) {
+          const { data: lastKitchenMembership } = await supabase
+            .from('kitchen_members')
+            .select('kitchen_id')
+            .eq('profile_id', user.sub)
+            .eq('kitchen_id', lastKitchenId)
+            .eq('is_active', true)
+            .maybeSingle()
+
+          if (lastKitchenMembership?.kitchen_id === lastKitchenId) {
+            url.pathname = `/${lastKitchenId}/dashboard`
+            const response = NextResponse.redirect(url)
+            copyAuthCookies(supabaseResponse, response)
+            return response
+          }
+        }
+
+        shouldClearLastKitchenCookie = true
       }
     }
 
     // 2. resolve oldest kitchen using the middleware Supabase client
-    const userId = user.sub as string
     const { data: kitchens } = await supabase
       .from('kitchen_members')
-      .select('kitchens(id, name)')
-      .eq('profile_id', userId)
+      .select('kitchen_id')
+      .eq('profile_id', user.sub)
       .eq('is_active', true)
       .order('created_at', { ascending: true })
+      .limit(1)
 
-    const firstKitchen = kitchens?.[0]?.kitchens as
-      | { id: string; name: string }
-      | undefined
+    const firstKitchenId = kitchens?.[0]?.kitchen_id
 
-    if (!firstKitchen?.id) {
+    if (!firstKitchenId) {
       if (isNoKitchenPage) {
         const response = NextResponse.next({ request })
         copyAuthCookies(supabaseResponse, response)
@@ -111,16 +125,19 @@ export async function updateSession(request: NextRequest) {
       url.pathname = '/no-kitchen'
       const response = NextResponse.redirect(url)
       copyAuthCookies(supabaseResponse, response)
+      if (shouldClearLastKitchenCookie) {
+        response.cookies.delete({ name: LAST_KITCHEN_COOKIE, path: '/' })
+      }
       return response
     }
 
     // 3. set last kitchen cookie and redirect
-    url.pathname = `/${firstKitchen.id}/dashboard`
+    url.pathname = `/${firstKitchenId}/dashboard`
     const response = NextResponse.redirect(url)
     copyAuthCookies(supabaseResponse, response)
     response.cookies.set(
       LAST_KITCHEN_COOKIE,
-      firstKitchen.id,
+      firstKitchenId,
       LAST_KITCHEN_COOKIE_OPTIONS,
     )
 
