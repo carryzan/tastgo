@@ -52,10 +52,10 @@ export function HourlyOrdersChart({ kitchenId }: HourlyOrdersChartProps) {
     <div className="rounded-2xl border border-border bg-card p-4 flex flex-col gap-3">
       <div className="flex items-end justify-between">
         <div className="flex flex-col gap-1">
-          <span className="text-xs text-muted-foreground">Hourly orders</span>
+          <span className="text-sm text-muted-foreground">Hourly orders</span>
           <span className="text-sm font-medium">Last 7 days</span>
         </div>
-        <span className="text-xs text-muted-foreground">
+        <span className="text-sm text-muted-foreground">
           Peak {formatHour(peakBucket.hour)} · {peakBucket.count}
         </span>
       </div>

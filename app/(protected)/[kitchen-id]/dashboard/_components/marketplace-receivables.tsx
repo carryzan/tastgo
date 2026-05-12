@@ -33,7 +33,7 @@ export function MarketplaceReceivables({ kitchenId }: MarketplaceReceivablesProp
     <div className="rounded-2xl border border-border bg-card p-4 flex flex-col gap-3">
       <div className="flex items-end justify-between">
         <div className="flex flex-col gap-1">
-          <span className="text-xs text-muted-foreground">Marketplace receivables</span>
+          <span className="text-sm text-muted-foreground">Marketplace receivables</span>
           <span className="text-sm font-medium">{monthLabel}</span>
         </div>
         <span className="text-sm font-semibold tabular-nums">
@@ -41,7 +41,7 @@ export function MarketplaceReceivables({ kitchenId }: MarketplaceReceivablesProp
         </span>
       </div>
       {rows.length === 0 ? (
-        <div className="text-xs text-muted-foreground py-6 text-center">
+        <div className="text-sm text-muted-foreground py-6 text-center">
           No outstanding receivables
         </div>
       ) : (
