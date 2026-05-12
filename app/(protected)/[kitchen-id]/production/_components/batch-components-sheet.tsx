@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, startTransition } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Batch } from './batch-columns'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -38,13 +38,23 @@ export function BatchComponentsSheet({
   const [components, setComponents] = useState<BatchComponent[] | null>(null)
   const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    if (!open) {
-      setComponents(null)
-      return
-    }
+  const handleOpenChange = useCallback(
+    (next: boolean) => {
+      if (!next) {
+        setComponents(null)
+        setLoading(false)
+      }
+      onOpenChange(next)
+    },
+    [onOpenChange]
+  )
 
-    setLoading(true)
+  useEffect(() => {
+    if (!open) return
+
+    startTransition(() => {
+      setLoading(true)
+    })
     const supabase = createClient()
     supabase
       .from('production_batch_components')
@@ -62,7 +72,7 @@ export function BatchComponentsSheet({
     : null
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetContent className="sm:max-w-lg">
         <SheetHeader>
           <SheetTitle>

@@ -133,6 +133,8 @@ export function CashAccountTransactionsSheet({
     enabled: open,
   })
 
+  // TanStack Table returns unstable function references; React Compiler skips memoization.
+  // eslint-disable-next-line react-hooks/incompatible-library -- upstream useReactTable API
   const table = useReactTable({
     data: lines ?? [],
     columns,

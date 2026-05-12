@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useTransition } from 'react'
+import { useEffect, startTransition as deferStateUpdate, useState, useTransition } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useKitchen } from '@/hooks/use-kitchen'
 import { receivePurchase } from '../_lib/purchase-actions'
@@ -61,27 +61,26 @@ export function ReceivePurchaseSheet({
   })
 
   useEffect(() => {
-    if (!open) {
-      setReceiveItems([])
-      setError(null)
-    }
-  }, [open])
-
-  useEffect(() => {
     if (purchaseItems) {
-      setReceiveItems(
-        purchaseItems.map((item) => ({
-          purchase_item_id: item.id,
-          inventory_item_name: item.inventory_items?.name ?? '—',
-          ordered_quantity: item.ordered_quantity,
-          received_quantity: String(item.ordered_quantity),
-        }))
-      )
+      deferStateUpdate(() => {
+        setReceiveItems(
+          purchaseItems.map((item) => ({
+            purchase_item_id: item.id,
+            inventory_item_name: item.inventory_items?.name ?? '—',
+            ordered_quantity: item.ordered_quantity,
+            received_quantity: String(item.ordered_quantity),
+          }))
+        )
+      })
     }
   }, [purchaseItems])
 
   function handleOpenChange(next: boolean) {
     if (pending) return
+    if (!next) {
+      setReceiveItems([])
+      setError(null)
+    }
     onOpenChange(next)
   }
 

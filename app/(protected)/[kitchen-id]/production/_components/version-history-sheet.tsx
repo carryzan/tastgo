@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useCallback } from 'react'
 import { HistoryIcon } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { Recipe } from './recipe-columns'
@@ -47,12 +47,16 @@ export function VersionHistorySheet({
     Record<string, RecipeComponent[] | 'loading'>
   >({})
 
-  useEffect(() => {
-    if (!open) {
-      setOpenValues([])
-      setComponentsByVersion({})
-    }
-  }, [open])
+  const handleOpenChange = useCallback(
+    (next: boolean) => {
+      if (!next) {
+        setOpenValues([])
+        setComponentsByVersion({})
+      }
+      onOpenChange(next)
+    },
+    [onOpenChange]
+  )
 
   function handleAccordionChange(values: string[]) {
     setOpenValues(values)
@@ -81,7 +85,7 @@ export function VersionHistorySheet({
   )
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetContent>
         <SheetHeader>
           <SheetTitle>Version History</SheetTitle>

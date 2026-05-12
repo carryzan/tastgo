@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useTransition } from 'react'
+import { useEffect, startTransition as deferStateUpdate, useState, useTransition } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { updateChartAccount } from '../_lib/chart-account-actions'
 import { CHART_ACCOUNTS_QUERY_KEY } from '../_lib/queries'
@@ -70,9 +70,11 @@ export function EditCashAccountDialog({
 
   useEffect(() => {
     if (!open) return
-    setIsActive(account.is_active)
-    setParentId(account.parent_account_id ?? NONE)
-    setError(null)
+    deferStateUpdate(() => {
+      setIsActive(account.is_active)
+      setParentId(account.parent_account_id ?? NONE)
+      setError(null)
+    })
   }, [open, account.id, account.is_active, account.parent_account_id])
 
   function handleOpenChange(next: boolean) {

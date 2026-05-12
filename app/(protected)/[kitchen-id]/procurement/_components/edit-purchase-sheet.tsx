@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
+import { useCallback, useEffect, useMemo, startTransition as deferStateUpdate, useState, useTransition } from 'react'
 import { PlusIcon, TrashIcon } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useKitchen } from '@/hooks/use-kitchen'
@@ -91,28 +91,27 @@ export function EditPurchaseSheet({
   })
 
   useEffect(() => {
-    if (!open) {
-      setSupplierId(purchase.supplier_id)
-      setInvoiceCode(purchase.supplier_invoice_code ?? '')
-      setItems([])
-      setError(null)
-    }
-  }, [open, purchase.id, purchase.supplier_id, purchase.supplier_invoice_code])
-
-  useEffect(() => {
     if (existingItems) {
-      setItems(
-        existingItems.map((item) => ({
-          inventory_item_id: item.inventory_item_id,
-          ordered_quantity: String(item.ordered_quantity),
-          unit_cost: String(item.unit_cost),
-        }))
-      )
+      deferStateUpdate(() => {
+        setItems(
+          existingItems.map((item) => ({
+            inventory_item_id: item.inventory_item_id,
+            ordered_quantity: String(item.ordered_quantity),
+            unit_cost: String(item.unit_cost),
+          }))
+        )
+      })
     }
   }, [existingItems])
 
   function handleOpenChange(next: boolean) {
     if (pending) return
+    if (!next) {
+      setSupplierId(purchase.supplier_id)
+      setInvoiceCode(purchase.supplier_invoice_code ?? '')
+      setItems([])
+      setError(null)
+    }
     onOpenChange(next)
   }
 

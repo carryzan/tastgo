@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, startTransition, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -42,12 +42,13 @@ export function CartDiscountDialog({
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (open) {
+    if (!open) return
+    startTransition(() => {
       setType(value?.type ?? 'fixed')
       setAmount(value ? String(value.value) : '')
       setReason(value?.reason ?? '')
       setError(null)
-    }
+    })
   }, [open, value])
 
   function submit() {

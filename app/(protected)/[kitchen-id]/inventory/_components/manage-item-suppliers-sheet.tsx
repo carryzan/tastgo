@@ -242,7 +242,7 @@ export function ManageItemSuppliersSheet({
                       colSpan={5}
                       className="py-8 pl-4 text-center text-sm text-muted-foreground"
                     >
-                      No suppliers linked yet. Click "Add supplier" to begin.
+                      {'No suppliers linked yet. Click "Add supplier" to begin.'}
                     </td>
                   </tr>
                 ) : (

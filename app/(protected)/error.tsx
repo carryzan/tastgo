@@ -25,6 +25,11 @@ export default function KitchenError({
             <EmptyTitle>Something Went Wrong</EmptyTitle>
             <EmptyDescription className="max-w-xs text-pretty">
               We couldn&apos;t load this kitchen. This might be a temporary issue.
+              {error.digest != null ? (
+                <span className="mt-2 block font-mono text-[10px] text-muted-foreground">
+                  Reference: {error.digest}
+                </span>
+              ) : null}
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>

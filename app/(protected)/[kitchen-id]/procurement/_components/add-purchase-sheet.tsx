@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
+import { useCallback, useMemo, useState, useTransition } from 'react'
 import { PlusIcon, TrashIcon } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useKitchen } from '@/hooks/use-kitchen'
@@ -76,17 +76,14 @@ export function AddPurchaseSheet({ open, onOpenChange }: AddPurchaseSheetProps) 
     enabled: open,
   })
 
-  useEffect(() => {
-    if (!open) {
+  function handleOpenChange(next: boolean) {
+    if (pending) return
+    if (!next) {
       setSupplierId('')
       setInvoiceCode('')
       setItems([])
       setError(null)
     }
-  }, [open])
-
-  function handleOpenChange(next: boolean) {
-    if (pending) return
     onOpenChange(next)
   }
 

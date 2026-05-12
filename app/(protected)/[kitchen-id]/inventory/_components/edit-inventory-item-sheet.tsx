@@ -62,11 +62,19 @@ export function EditInventoryItemSheet({
 
   useEffect(() => {
     if (!open || !showOB) return
-    setBalanceLoaded(false)
-    getItemOpeningBalance(kitchen.id, item.id).then((result) => {
-      if (!(result instanceof Error)) setBalance(result)
-      setBalanceLoaded(true)
+    let cancelled = false
+    queueMicrotask(() => {
+      if (cancelled) return
+      setBalanceLoaded(false)
+      void getItemOpeningBalance(kitchen.id, item.id).then((result) => {
+        if (cancelled) return
+        if (!(result instanceof Error)) setBalance(result)
+        setBalanceLoaded(true)
+      })
     })
+    return () => {
+      cancelled = true
+    }
   }, [open, item.id, kitchen.id, showOB])
 
   function handleOpenChange(next: boolean) {

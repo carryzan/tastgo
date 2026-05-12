@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, startTransition as deferStateUpdate, useState, useTransition } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useKitchen } from '@/hooks/use-kitchen'
 import { createSupplierReturn } from '../_lib/return-actions'
@@ -95,35 +95,34 @@ export function AddReturnSheet({
   })
 
   useEffect(() => {
-    if (!open) {
+    deferStateUpdate(() => {
+      if (purchaseItemsData) {
+        setReturnItems(
+          purchaseItemsData
+            .filter((item) => item.batch_id)
+            .map((item) => ({
+              purchase_item_id: item.id,
+              inventory_item_id: item.inventory_item_id,
+              batch_id: item.batch_id ?? '',
+              inventory_item_name: item.inventory_items?.name ?? '—',
+              received_quantity: item.received_quantity ?? item.ordered_quantity,
+              returned_quantity: '',
+            }))
+        )
+      } else {
+        setReturnItems([])
+      }
+    })
+  }, [purchaseItemsData])
+
+  function handleOpenChange(next: boolean) {
+    if (pending) return
+    if (!next) {
       if (!prefilledSupplierId) setSupplierId('')
       if (!prefilledPurchaseId) setPurchaseId('')
       setReturnItems([])
       setError(null)
     }
-  }, [open, prefilledSupplierId, prefilledPurchaseId])
-
-  useEffect(() => {
-    if (purchaseItemsData) {
-      setReturnItems(
-        purchaseItemsData
-          .filter((item) => item.batch_id)
-          .map((item) => ({
-            purchase_item_id: item.id,
-            inventory_item_id: item.inventory_item_id,
-            batch_id: item.batch_id ?? '',
-            inventory_item_name: item.inventory_items?.name ?? '—',
-            received_quantity: item.received_quantity ?? item.ordered_quantity,
-            returned_quantity: '',
-          }))
-      )
-    } else {
-      setReturnItems([])
-    }
-  }, [purchaseItemsData])
-
-  function handleOpenChange(next: boolean) {
-    if (pending) return
     onOpenChange(next)
   }
 

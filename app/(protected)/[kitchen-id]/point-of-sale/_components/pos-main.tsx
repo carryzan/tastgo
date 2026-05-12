@@ -1511,7 +1511,9 @@ function PosOrderPanel({
                   <NotebookPenIcon className="size-3.5" />
                   Note
                 </div>
-                <p className="whitespace-pre-wrap text-sm">"{detail.notes}"</p>
+                <p className="whitespace-pre-wrap text-sm">
+                  {`\u201c${detail.notes}\u201d`}
+                </p>
               </div>
             ) : null}
 
