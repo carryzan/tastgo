@@ -8,6 +8,7 @@ interface CreateInventoryItemData {
   name: string
   category_id: string | null
   image_url: string | null
+  storage_uom_id: string | null
   yield_percentage: number
   par_level: number | null
   min_level: number | null
@@ -20,6 +21,7 @@ interface UpdateInventoryItemData {
   name?: string
   category_id?: string | null
   image_url?: string | null
+  storage_uom_id?: string | null
   yield_percentage?: number
   par_level?: number | null
   min_level?: number | null

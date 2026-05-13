@@ -4,6 +4,13 @@ import { useState, useTransition, useEffect, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useKitchen } from '@/hooks/use-kitchen'
 import { createClient } from '@/lib/supabase/client'
+import {
+  buildProductionRecipeUomOptions,
+  defaultUomId,
+  fetchProductionRecipeUomConversions,
+  type KitchenUom,
+  type ProductionRecipeUomConversion,
+} from '@/lib/uom-conversions'
 import { createBatch } from '../_lib/batch-actions'
 import { BATCHES_QUERY_KEY } from '../_lib/queries'
 import type { ServicePeriod } from '../_lib/service-periods'
@@ -35,11 +42,19 @@ import {
   FieldGroup,
   FieldLabel,
 } from '@/components/ui/field'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 interface RecipeOption {
   id: string
   name: string
   current_version_id: string | null
+  storage_uom_id: string | null
 }
 
 interface CreateBatchDialogProps {
@@ -47,12 +62,15 @@ interface CreateBatchDialogProps {
 }
 
 export function CreateBatchDialog({ servicePeriods }: CreateBatchDialogProps) {
-  const { kitchen, membership } = useKitchen()
+  const { kitchen, membership, unitsOfMeasure } = useKitchen()
+  const uoms = unitsOfMeasure as KitchenUom[]
   const queryClient = useQueryClient()
 
   const [open, setOpen] = useState(false)
   const [recipes, setRecipes] = useState<RecipeOption[]>([])
+  const [uomConversions, setUomConversions] = useState<ProductionRecipeUomConversion[]>([])
   const [selectedRecipeId, setSelectedRecipeId] = useState('')
+  const [targetUomId, setTargetUomId] = useState('')
   const [servicePeriodId, setServicePeriodId] = useState('__none__')
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
@@ -85,15 +103,20 @@ export function CreateBatchDialog({ servicePeriods }: CreateBatchDialogProps) {
   useEffect(() => {
     if (!open) return
     const supabase = createClient()
-    supabase
+    Promise.all([
+      supabase
       .from('production_recipes')
-      .select('id, name, current_version_id')
+      .select('id, name, current_version_id, storage_uom_id')
       .eq('kitchen_id', kitchen.id)
       .eq('is_active', true)
       .eq('track_stock', true)
       .not('current_version_id', 'is', null)
-      .order('name')
-      .then(({ data }) => setRecipes((data ?? []) as RecipeOption[]))
+      .order('name'),
+      fetchProductionRecipeUomConversions(kitchen.id),
+    ]).then(([recipesResult, conversions]) => {
+      setRecipes((recipesResult.data ?? []) as RecipeOption[])
+      setUomConversions(conversions)
+    })
   }, [open, kitchen.id])
 
   function handleOpenChange(next: boolean) {
@@ -102,6 +125,7 @@ export function CreateBatchDialog({ servicePeriods }: CreateBatchDialogProps) {
     if (!next) {
       setError(null)
       setSelectedRecipeId('')
+      setTargetUomId('')
       setServicePeriodId('__none__')
     }
   }
@@ -120,6 +144,7 @@ export function CreateBatchDialog({ servicePeriods }: CreateBatchDialogProps) {
     const selectedRecipe = recipes.find((r) => r.id === selectedRecipeId)
     if (!selectedRecipe?.current_version_id)
       return setError('Selected recipe has no active version.')
+    if (!targetUomId) return setError('Configure and select a production UOM.')
 
     startTransition(async () => {
       try {
@@ -130,6 +155,7 @@ export function CreateBatchDialog({ servicePeriods }: CreateBatchDialogProps) {
           service_period_id:
             servicePeriodId !== '__none__' ? servicePeriodId : null,
           target_quantity: targetQuantity,
+          target_uom_id: targetUomId,
           created_by: (membership as unknown as { id: string }).id,
         })
 
@@ -174,7 +200,18 @@ export function CreateBatchDialog({ servicePeriods }: CreateBatchDialogProps) {
                   items={recipeItems}
                   value={selectedRecipeId || null}
                   onValueChange={(next) => {
+                    const selected = recipes.find((recipe) => recipe.id === next) ?? null
                     setSelectedRecipeId(next ?? '')
+                    setTargetUomId(
+                      defaultUomId(
+                        buildProductionRecipeUomOptions(
+                          selected,
+                          uomConversions,
+                          uoms,
+                          'production'
+                        )
+                      )
+                    )
                   }}
                   modal={true}
                   itemToStringLabel={(id) => recipeNameById.get(String(id)) ?? ''}
@@ -196,6 +233,39 @@ export function CreateBatchDialog({ servicePeriods }: CreateBatchDialogProps) {
                   </ComboboxContent>
                 </Combobox>
               </div>
+            </Field>
+
+            <Field>
+              <FieldLabel>Production UOM</FieldLabel>
+              <Select
+                value={targetUomId || undefined}
+                onValueChange={setTargetUomId}
+                disabled={
+                  !selectedRecipeId ||
+                  buildProductionRecipeUomOptions(
+                    recipes.find((recipe) => recipe.id === selectedRecipeId),
+                    uomConversions,
+                    uoms,
+                    'production'
+                  ).length === 0
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Configure UOM first" />
+                </SelectTrigger>
+                <SelectContent>
+                  {buildProductionRecipeUomOptions(
+                    recipes.find((recipe) => recipe.id === selectedRecipeId),
+                    uomConversions,
+                    uoms,
+                    'production'
+                  ).map((option) => (
+                    <SelectItem key={option.uom_id} value={option.uom_id}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </Field>
 
             <Field>

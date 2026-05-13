@@ -7,6 +7,7 @@ interface ReturnLineItem {
   inventory_item_id: string
   batch_id: string
   returned_quantity: number
+  uom_id?: string | null
 }
 
 interface CreateReturnData {
@@ -27,6 +28,7 @@ export async function createSupplierReturn(data: CreateReturnData) {
       inventory_item_id: item.inventory_item_id,
       batch_id: item.batch_id,
       returned_quantity: item.returned_quantity,
+      uom_id: item.uom_id ?? null,
     })),
   })
 

@@ -17,7 +17,7 @@ import {
 import { InventorySiteHeader } from './inventory-site-header'
 import { AddInventoryItemSheet } from './add-inventory-item-sheet'
 import { EditInventoryItemSheet } from './edit-inventory-item-sheet'
-import { UOMConfigDialog } from './uom-config-dialog'
+import { UOMConfigSheet } from './uom-config-sheet'
 import { ManageItemSuppliersSheet } from './manage-item-suppliers-sheet'
 import {
   INVENTORY_QUERY_KEY,
@@ -150,7 +150,7 @@ export function InventoryMain({ initialCategories }: InventoryMainProps) {
         isLoading={deletePending}
       />
       {uomConfigItem && (
-        <UOMConfigDialog
+        <UOMConfigSheet
           itemId={uomConfigItem.id}
           itemName={uomConfigItem.name}
           open={!!uomConfigItem}

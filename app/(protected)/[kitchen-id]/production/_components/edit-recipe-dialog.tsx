@@ -26,6 +26,13 @@ import {
   FieldGroup,
   FieldLabel,
 } from '@/components/ui/field'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 interface EditRecipeSheetProps {
   recipe: Recipe
@@ -38,9 +45,10 @@ export function EditRecipeSheet({
   open,
   onOpenChange,
 }: EditRecipeSheetProps) {
-  const { kitchen } = useKitchen()
+  const { kitchen, unitsOfMeasure } = useKitchen()
   const queryClient = useQueryClient()
   const [isActive, setIsActive] = useState(recipe.is_active)
+  const [storageUomId, setStorageUomId] = useState(recipe.storage_uom_id ?? '__none__')
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
@@ -50,6 +58,7 @@ export function EditRecipeSheet({
     if (!next) {
       setError(null)
       setIsActive(recipe.is_active)
+      setStorageUomId(recipe.storage_uom_id ?? '__none__')
     }
   }
 
@@ -69,6 +78,8 @@ export function EditRecipeSheet({
         const updates: Record<string, unknown> = {}
 
         if (name !== recipe.name) updates.name = name
+        const nextStorageUomId = storageUomId === '__none__' ? null : storageUomId
+        if (nextStorageUomId !== recipe.storage_uom_id) updates.storage_uom_id = nextStorageUomId
         if (
           variance_tolerance_percentage !==
           (recipe.variance_tolerance_percentage != null
@@ -152,6 +163,25 @@ export function EditRecipeSheet({
                 />
               </div>
             </Field>
+
+            {recipe.track_stock && (
+              <Field>
+                <FieldLabel>Storage UOM</FieldLabel>
+                <Select value={storageUomId} onValueChange={setStorageUomId}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select storage UOM" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Configure later</SelectItem>
+                    {(unitsOfMeasure as { id: string; name: string; abbreviation: string }[]).map((uom) => (
+                      <SelectItem key={uom.id} value={uom.id}>
+                        {uom.name} ({uom.abbreviation})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            )}
           </FieldGroup>
 
           {error && <FieldError className="mt-2">{error}</FieldError>}

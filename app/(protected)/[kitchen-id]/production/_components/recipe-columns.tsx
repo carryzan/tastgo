@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react'
 import type { ColumnDef, Row } from '@tanstack/react-table'
-import { BookOpenIcon, PlusCircleIcon } from 'lucide-react'
+import { BookOpenIcon, PlusCircleIcon, ScaleIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { getSelectColumn } from '@/components/data-table/data-table-select-column'
@@ -14,6 +14,7 @@ export interface Recipe {
   kitchen_id: string
   name: string
   track_stock: boolean
+  storage_uom_id: string | null
   current_version_id: string | null
   variance_tolerance_percentage: string | null
   is_active: boolean
@@ -42,6 +43,7 @@ export function getRecipeColumns(
     onDelete: (row: Row<Recipe>) => void
     onVersionHistory: (row: Row<Recipe>) => void
     onNewVersion: (row: Row<Recipe>) => void
+    onUomConfig: (row: Row<Recipe>) => void
   }
 ): ColumnDef<Recipe>[] {
   const showRowActions = Boolean(permissions.canEdit || permissions.canDelete)
@@ -56,6 +58,12 @@ export function getRecipeColumns(
         <PlusCircleIcon />
         New Version
       </DropdownMenuItem>
+      {row.original.track_stock && (
+        <DropdownMenuItem onClick={() => callbacks.onUomConfig(row)}>
+          <ScaleIcon />
+          UOM Conversions
+        </DropdownMenuItem>
+      )}
     </>
   )
 

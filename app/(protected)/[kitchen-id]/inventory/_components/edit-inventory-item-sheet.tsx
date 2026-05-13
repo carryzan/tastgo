@@ -116,6 +116,7 @@ export function EditInventoryItemSheet({
         const updates: Record<string, unknown> = {}
         if (values.name !== item.name) updates.name = values.name
         if (values.category_id !== item.category_id) updates.category_id = values.category_id
+        if (values.storage_uom_id !== item.storage_uom_id) updates.storage_uom_id = values.storage_uom_id
         if (values.yield_percentage !== item.yield_percentage) updates.yield_percentage = values.yield_percentage
         if (values.par_level !== item.par_level) updates.par_level = values.par_level
         if (values.min_level !== item.min_level) updates.min_level = values.min_level
@@ -189,6 +190,7 @@ export function EditInventoryItemSheet({
               name: item.name,
               category_id: item.category_id,
               image_url: item.image_url,
+              storage_uom_id: item.storage_uom_id,
               yield_percentage: item.yield_percentage,
               par_level: item.par_level,
               min_level: item.min_level,

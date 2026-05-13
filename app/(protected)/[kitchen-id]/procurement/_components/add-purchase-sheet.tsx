@@ -4,6 +4,13 @@ import { useCallback, useMemo, useState, useTransition } from 'react'
 import { PlusIcon, TrashIcon } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useKitchen } from '@/hooks/use-kitchen'
+import {
+  buildInventoryUomOptions,
+  defaultUomId,
+  fetchInventoryUomConversions,
+  type InventoryUomConversion,
+  type KitchenUom,
+} from '@/lib/uom-conversions'
 import { createPurchase } from '../_lib/purchase-actions'
 import { PURCHASES_QUERY_KEY } from '../_lib/queries'
 import {
@@ -46,6 +53,7 @@ import {
 
 interface LineItem {
   inventory_item_id: string
+  uom_id: string
   ordered_quantity: string
   unit_cost: string
 }
@@ -56,7 +64,8 @@ interface AddPurchaseSheetProps {
 }
 
 export function AddPurchaseSheet({ open, onOpenChange }: AddPurchaseSheetProps) {
-  const { kitchen } = useKitchen()
+  const { kitchen, unitsOfMeasure } = useKitchen()
+  const uoms = unitsOfMeasure as KitchenUom[]
   const queryClient = useQueryClient()
   const [supplierId, setSupplierId] = useState('')
   const [invoiceCode, setInvoiceCode] = useState('')
@@ -76,6 +85,12 @@ export function AddPurchaseSheet({ open, onOpenChange }: AddPurchaseSheetProps) 
     enabled: open,
   })
 
+  const { data: uomConversions = [] } = useQuery<InventoryUomConversion[]>({
+    queryKey: ['inventory-uom-conversions', kitchen.id],
+    queryFn: () => fetchInventoryUomConversions(kitchen.id),
+    enabled: open,
+  })
+
   function handleOpenChange(next: boolean) {
     if (pending) return
     if (!next) {
@@ -90,7 +105,7 @@ export function AddPurchaseSheet({ open, onOpenChange }: AddPurchaseSheetProps) 
   function addItem() {
     setItems((prev) => [
       ...prev,
-      { inventory_item_id: '', ordered_quantity: '', unit_cost: '' },
+      { inventory_item_id: '', uom_id: '', ordered_quantity: '', unit_cost: '' },
     ])
   }
 
@@ -127,6 +142,7 @@ export function AddPurchaseSheet({ open, onOpenChange }: AddPurchaseSheetProps) 
 
     for (const item of items) {
       if (!item.inventory_item_id) return setError('Select an item for each row.')
+      if (!item.uom_id) return setError('Configure and select a purchase UOM for each row.')
       if (!item.ordered_quantity || Number(item.ordered_quantity) <= 0)
         return setError('Enter a valid quantity for each item.')
       if (!item.unit_cost || Number(item.unit_cost) < 0)
@@ -140,6 +156,7 @@ export function AddPurchaseSheet({ open, onOpenChange }: AddPurchaseSheetProps) 
           supplierId,
           items.map((item) => ({
             inventory_item_id: item.inventory_item_id,
+            uom_id: item.uom_id,
             ordered_quantity: Number(item.ordered_quantity),
             unit_cost: Number(item.unit_cost),
           })),
@@ -231,9 +248,10 @@ export function AddPurchaseSheet({ open, onOpenChange }: AddPurchaseSheetProps) 
           <div className="flex-1 overflow-y-auto">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead className="pl-4">Item</TableHead>
-                  <TableHead className="w-28">Qty</TableHead>
+                  <TableRow>
+                    <TableHead className="pl-4">Item</TableHead>
+                    <TableHead className="w-28">UOM</TableHead>
+                    <TableHead className="w-28">Qty</TableHead>
                   <TableHead className="w-28">Unit cost</TableHead>
                   <TableHead className="w-24">Total</TableHead>
                   <TableHead className="w-10" />
@@ -243,7 +261,7 @@ export function AddPurchaseSheet({ open, onOpenChange }: AddPurchaseSheetProps) 
                 {items.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={5}
+                      colSpan={6}
                       className="h-32 text-center text-muted-foreground"
                     >
                       No items yet. Click &ldquo;Add item&rdquo; to begin.
@@ -252,14 +270,33 @@ export function AddPurchaseSheet({ open, onOpenChange }: AddPurchaseSheetProps) 
                 ) : (
                   items.map((item, index) => {
                     const available = availableItemsForRow(index)
+                    const selectedInventoryItem =
+                      inventoryItems?.find((inv) => inv.id === item.inventory_item_id) ?? null
+                    const uomOptions = buildInventoryUomOptions(
+                      selectedInventoryItem,
+                      uomConversions,
+                      uoms,
+                      'purchase'
+                    )
                     return (
                       <TableRow key={index}>
                         <TableCell className="pl-4">
                           <Select
                             value={item.inventory_item_id || undefined}
-                            onValueChange={(v) =>
-                              updateItem(index, { inventory_item_id: v })
-                            }
+                            onValueChange={(v) => {
+                              const nextItem =
+                                inventoryItems?.find((inv) => inv.id === v) ?? null
+                              const nextOptions = buildInventoryUomOptions(
+                                nextItem,
+                                uomConversions,
+                                uoms,
+                                'purchase'
+                              )
+                              updateItem(index, {
+                                inventory_item_id: v,
+                                uom_id: defaultUomId(nextOptions),
+                              })
+                            }}
                             disabled={pending}
                           >
                             <SelectTrigger className="w-full">
@@ -269,6 +306,24 @@ export function AddPurchaseSheet({ open, onOpenChange }: AddPurchaseSheetProps) 
                               {available.map((inv) => (
                                 <SelectItem key={inv.id} value={inv.id}>
                                   {inv.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          <Select
+                            value={item.uom_id || undefined}
+                            onValueChange={(v) => updateItem(index, { uom_id: v })}
+                            disabled={pending || !item.inventory_item_id || uomOptions.length === 0}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="UOM" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {uomOptions.map((option) => (
+                                <SelectItem key={option.uom_id} value={option.uom_id}>
+                                  {option.label}
                                 </SelectItem>
                               ))}
                             </SelectContent>

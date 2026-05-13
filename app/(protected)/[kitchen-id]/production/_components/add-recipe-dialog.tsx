@@ -26,6 +26,13 @@ import {
   FieldLabel,
 } from '@/components/ui/field'
 import { Switch } from '@/components/ui/switch'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 interface AddRecipeDialogProps {
   open: boolean
@@ -33,10 +40,11 @@ interface AddRecipeDialogProps {
 }
 
 export function AddRecipeDialog({ open, onOpenChange }: AddRecipeDialogProps) {
-  const { kitchen } = useKitchen()
+  const { kitchen, unitsOfMeasure } = useKitchen()
   const queryClient = useQueryClient()
 
   const [trackStock, setTrackStock] = useState(false)
+  const [storageUomId, setStorageUomId] = useState('__none__')
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
@@ -46,6 +54,7 @@ export function AddRecipeDialog({ open, onOpenChange }: AddRecipeDialogProps) {
     if (!next) {
       setError(null)
       setTrackStock(false)
+      setStorageUomId('__none__')
     }
   }
 
@@ -62,6 +71,7 @@ export function AddRecipeDialog({ open, onOpenChange }: AddRecipeDialogProps) {
           kitchen_id: kitchen.id,
           name: values.name,
           track_stock: values.track_stock,
+          storage_uom_id: storageUomId === '__none__' ? null : storageUomId,
           variance_tolerance_percentage: values.variance_tolerance_percentage,
         })
 
@@ -138,6 +148,25 @@ export function AddRecipeDialog({ open, onOpenChange }: AddRecipeDialogProps) {
                 When enabled, batches will deduct from inventory.
               </FieldDescription>
             </Field>
+
+            {trackStock && (
+              <Field>
+                <FieldLabel>Storage UOM</FieldLabel>
+                <Select value={storageUomId} onValueChange={setStorageUomId}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select storage UOM" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Configure later</SelectItem>
+                    {(unitsOfMeasure as { id: string; name: string; abbreviation: string }[]).map((uom) => (
+                      <SelectItem key={uom.id} value={uom.id}>
+                        {uom.name} ({uom.abbreviation})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            )}
           </FieldGroup>
 
           {error && <FieldError className="mt-2">{error}</FieldError>}

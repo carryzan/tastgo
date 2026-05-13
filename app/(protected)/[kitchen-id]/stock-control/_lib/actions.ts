@@ -15,6 +15,7 @@ interface WasteLogData {
   inventoryItemId: string | null
   productionRecipeId: string | null
   quantity: number
+  uomId?: string | null
   reason: string | null
 }
 
@@ -39,7 +40,8 @@ export async function updateStockCountItem(
   kitchenId: string,
   itemId: string,
   countedQuantity: number,
-  adjustmentReason: string | null
+  adjustmentReason: string | null,
+  countedUomId?: string | null
 ) {
   const supabase = await createClient()
   const { data, error } = await supabase.rpc('update_stock_count_item', {
@@ -47,6 +49,7 @@ export async function updateStockCountItem(
     p_item_id: itemId,
     p_counted_quantity: countedQuantity,
     p_adjustment_reason: adjustmentReason,
+    p_counted_uom_id: countedUomId ?? null,
   })
 
   if (error) return new Error(error.message)
@@ -73,6 +76,7 @@ export async function recordWasteLog(data: WasteLogData) {
     p_inventory_item_id: data.inventoryItemId,
     p_production_recipe_id: data.productionRecipeId,
     p_quantity: data.quantity,
+    p_uom_id: data.uomId ?? null,
     p_reason: data.reason,
   })
 

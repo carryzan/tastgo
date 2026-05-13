@@ -15,6 +15,7 @@ interface CreateModifierGroupOptionData {
   inventory_item_id: string | null
   removed_inventory_item_id: string | null
   quantity: number | null
+  uom_id: string | null
   price_charge: number
   is_active: boolean
 }
@@ -42,6 +43,7 @@ export async function createModifierGroup(data: {
         inventory_item_id: option.inventory_item_id,
         removed_inventory_item_id: option.removed_inventory_item_id,
         quantity: option.quantity,
+        uom_id: option.uom_id,
         price_charge: option.price_charge,
         is_active: option.is_active,
       })),

@@ -16,7 +16,9 @@ export interface Batch {
   recipe_version_id: string
   service_period_id: string | null
   target_quantity: string
+  target_uom_id: string | null
   actual_quantity: string | null
+  actual_uom_id: string | null
   cost_per_unit: string | null
   total_cost: string | null
   batch_id: string | null
@@ -26,7 +28,7 @@ export interface Batch {
   reversed_by: string | null
   reversed_at: string | null
   reversal_reason: string | null
-  production_recipes: { id: string; name: string } | null
+  production_recipes: { id: string; name: string; storage_uom_id: string | null } | null
   production_recipe_versions: { id: string; version_number: number } | null
   production_service_periods: { id: string; name: string } | null
 }

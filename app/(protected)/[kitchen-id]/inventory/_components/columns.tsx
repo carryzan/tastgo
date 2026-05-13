@@ -23,6 +23,7 @@ export interface InventoryItem {
   created_at: string
   updated_at: string
   category_name: string | null
+  storage_uom_id: string | null
   storage_uom_abbreviation: string | null
   current_quantity: string | number
   stock_value: string | number

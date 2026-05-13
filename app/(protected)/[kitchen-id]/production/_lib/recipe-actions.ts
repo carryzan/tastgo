@@ -13,22 +13,24 @@ interface CreateRecipeData {
   kitchen_id: string
   name: string
   track_stock: boolean
+  storage_uom_id: string | null
   variance_tolerance_percentage: number | null
 }
 
 interface UpdateRecipeData {
   name?: string
+  storage_uom_id?: string | null
   variance_tolerance_percentage?: number | null
   is_active?: boolean
 }
 
 export async function createRecipe(data: CreateRecipeData) {
   const supabase = await createClient()
-  const { kitchen_id, name, track_stock, variance_tolerance_percentage } = data
+  const { kitchen_id, name, track_stock, storage_uom_id, variance_tolerance_percentage } = data
 
   const { error } = await supabase
     .from('production_recipes')
-    .insert({ kitchen_id, name, track_stock, variance_tolerance_percentage })
+    .insert({ kitchen_id, name, track_stock, storage_uom_id, variance_tolerance_percentage })
 
   if (error) return new Error(error.message)
 

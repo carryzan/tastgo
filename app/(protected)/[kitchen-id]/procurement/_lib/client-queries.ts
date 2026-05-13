@@ -9,6 +9,7 @@ export interface SupplierPick {
 export interface InventoryItemPick {
   id: string
   name: string
+  storage_uom_id: string | null
 }
 
 export interface CashAccountPick {
@@ -40,7 +41,7 @@ export interface PurchaseItemRow {
   unit_cost: string | number
   line_total: string | number
   batch_id: string | null
-  inventory_items: { id: string; name: string } | null
+  inventory_items: { id: string; name: string; storage_uom_id: string | null } | null
 }
 
 export interface PurchasePaymentSettlementRow {
@@ -199,7 +200,7 @@ export async function fetchActiveInventoryItems(kitchenId: string): Promise<Inve
   const supabase = createClient()
   const { data, error } = await supabase
     .from('inventory_items')
-    .select('id, name')
+    .select('id, name, storage_uom_id')
     .eq('kitchen_id', kitchenId)
     .eq('is_active', true)
     .order('name')
@@ -239,7 +240,7 @@ export async function fetchPurchaseItems(purchaseId: string): Promise<PurchaseIt
   const supabase = createClient()
   const { data, error } = await supabase
     .from('purchase_items')
-    .select('id, inventory_item_id, ordered_quantity, received_quantity, storage_quantity, unit_cost, line_total, batch_id, inventory_items!inventory_item_id(id, name)')
+    .select('id, inventory_item_id, ordered_quantity, received_quantity, storage_quantity, unit_cost, line_total, batch_id, inventory_items!inventory_item_id(id, name, storage_uom_id)')
     .eq('purchase_id', purchaseId)
     .order('created_at', { ascending: true })
   if (error) throw new Error(error.message)

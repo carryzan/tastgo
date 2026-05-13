@@ -5,6 +5,16 @@ import { PlusIcon, TrashIcon } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useKitchen } from '@/hooks/use-kitchen'
 import { useKitchenUpload } from '@/hooks/use-kitchen-upload'
+import {
+  buildInventoryUomOptions,
+  buildProductionRecipeUomOptions,
+  defaultUomId,
+  fetchInventoryUomConversions,
+  fetchProductionRecipeUomConversions,
+  type InventoryUomConversion,
+  type KitchenUom,
+  type ProductionRecipeUomConversion,
+} from '@/lib/uom-conversions'
 import { createMenuItem } from '../_lib/menu-item-actions'
 import { MENU_ITEMS_QUERY_KEY } from '../_lib/queries'
 import { mapMenuDbError } from '../_lib/db-errors'
@@ -53,12 +63,6 @@ import { Spinner } from '@/components/ui/spinner'
 
 type ComponentType = 'inventory_item' | 'production_recipe'
 
-interface Uom {
-  id: string
-  name: string
-  abbreviation: string
-}
-
 interface ComponentRow {
   key: string
   component_type: ComponentType
@@ -74,14 +78,14 @@ interface AddMenuItemSheetProps {
   menus: Menu[]
 }
 
-function createComponentRow(defaultUomId: string): ComponentRow {
+function createComponentRow(): ComponentRow {
   return {
     key: crypto.randomUUID(),
     component_type: 'inventory_item',
     inventory_item_id: '',
     production_recipe_id: '',
     recipe_quantity: '',
-    uom_id: defaultUomId,
+    uom_id: '',
   }
 }
 
@@ -94,11 +98,17 @@ export function AddMenuItemSheet({
   const brands = useMenuBrandOptions()
   const { upload } = useKitchenUpload('menu-items')
   const queryClient = useQueryClient()
-  const uoms = unitsOfMeasure as Uom[]
+  const uoms = unitsOfMeasure as KitchenUom[]
 
   const [inventoryItems, setInventoryItems] = useState<InventoryItemPick[]>([])
   const [productionRecipes, setProductionRecipes] = useState<
     ProductionRecipePick[]
+  >([])
+  const [inventoryUomConversions, setInventoryUomConversions] = useState<
+    InventoryUomConversion[]
+  >([])
+  const [productionUomConversions, setProductionUomConversions] = useState<
+    ProductionRecipeUomConversion[]
   >([])
   const [brandOverride, setBrandOverride] = useState<string | null>(null)
   const [name, setName] = useState('')
@@ -151,10 +161,14 @@ export function AddMenuItemSheet({
     Promise.all([
       fetchActiveInventoryItems(kitchen.id),
       fetchActiveProductionRecipes(kitchen.id),
+      fetchInventoryUomConversions(kitchen.id),
+      fetchProductionRecipeUomConversions(kitchen.id),
     ])
-      .then(([inventory, recipes]) => {
+      .then(([inventory, recipes, inventoryConversions, productionConversions]) => {
         setInventoryItems(inventory)
         setProductionRecipes(recipes)
+        setInventoryUomConversions(inventoryConversions)
+        setProductionUomConversions(productionConversions)
       })
       .catch(() => setError('Failed to load inventory or recipe data.'))
   }, [open, kitchen.id])
@@ -180,7 +194,7 @@ export function AddMenuItemSheet({
   function addRow() {
     setComponents((current) => [
       ...current,
-      createComponentRow(uoms[0]?.id ?? ''),
+      createComponentRow(),
     ])
   }
 
@@ -451,6 +465,7 @@ export function AddMenuItemSheet({
                               component_type: nextValue as ComponentType,
                               inventory_item_id: '',
                               production_recipe_id: '',
+                              uom_id: '',
                             })
                           }
                           disabled={pending}
@@ -474,9 +489,21 @@ export function AddMenuItemSheet({
                             items={inventoryIds}
                             value={component.inventory_item_id || null}
                             onValueChange={(nextValue) =>
-                              updateRow(index, {
-                                inventory_item_id: nextValue ?? '',
-                              })
+                              {
+                                const inventoryItem =
+                                  inventoryItems.find((item) => item.id === nextValue) ?? null
+                                updateRow(index, {
+                                  inventory_item_id: nextValue ?? '',
+                                  uom_id: defaultUomId(
+                                    buildInventoryUomOptions(
+                                      inventoryItem,
+                                      inventoryUomConversions,
+                                      uoms,
+                                      'recipe'
+                                    )
+                                  ),
+                                })
+                              }
                             }
                             modal
                             itemToStringLabel={(id) =>
@@ -503,9 +530,21 @@ export function AddMenuItemSheet({
                             items={recipeIds}
                             value={component.production_recipe_id || null}
                             onValueChange={(nextValue) =>
-                              updateRow(index, {
-                                production_recipe_id: nextValue ?? '',
-                              })
+                              {
+                                const productionRecipe =
+                                  productionRecipes.find((recipe) => recipe.id === nextValue) ?? null
+                                updateRow(index, {
+                                  production_recipe_id: nextValue ?? '',
+                                  uom_id: defaultUomId(
+                                    buildProductionRecipeUomOptions(
+                                      productionRecipe,
+                                      productionUomConversions,
+                                      uoms,
+                                      'recipe'
+                                    )
+                                  ),
+                                })
+                              }
                             }
                             modal
                             itemToStringLabel={(id) =>
@@ -544,24 +583,46 @@ export function AddMenuItemSheet({
                         />
                       </td>
                       <td className="px-2 py-1.5">
+                        {(() => {
+                          const options =
+                            component.component_type === 'inventory_item'
+                              ? buildInventoryUomOptions(
+                                  inventoryItems.find(
+                                    (item) => item.id === component.inventory_item_id
+                                  ),
+                                  inventoryUomConversions,
+                                  uoms,
+                                  'recipe'
+                                )
+                              : buildProductionRecipeUomOptions(
+                                  productionRecipes.find(
+                                    (recipe) => recipe.id === component.production_recipe_id
+                                  ),
+                                  productionUomConversions,
+                                  uoms,
+                                  'recipe'
+                                )
+                          return (
                         <Select
                           value={component.uom_id}
                           onValueChange={(nextValue) =>
                             updateRow(index, { uom_id: nextValue })
                           }
-                          disabled={pending}
+                          disabled={pending || options.length === 0}
                         >
                           <SelectTrigger className="w-full">
                             <SelectValue placeholder="UOM" />
                           </SelectTrigger>
                           <SelectContent>
-                            {uoms.map((uom) => (
-                              <SelectItem key={uom.id} value={uom.id}>
-                                {uom.abbreviation || uom.name}
+                            {options.map((uom) => (
+                              <SelectItem key={uom.uom_id} value={uom.uom_id}>
+                                {uom.label}
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
+                          )
+                        })()}
                       </td>
                       <td className="py-1.5 pl-1 pr-3">
                         <Button

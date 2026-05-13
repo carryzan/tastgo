@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 interface PurchaseLineItem {
   inventory_item_id: string
   ordered_quantity: number
+  uom_id?: string | null
   unit_cost: number
 }
 
@@ -33,6 +34,7 @@ export async function createPurchase(
     p_items: items.map((item) => ({
       inventory_item_id: item.inventory_item_id,
       ordered_quantity: item.ordered_quantity,
+      uom_id: item.uom_id ?? null,
       unit_cost: item.unit_cost,
     })),
   })
@@ -90,6 +92,7 @@ export async function replacePurchaseItems(
         purchase_id: purchaseId,
         inventory_item_id: item.inventory_item_id,
         ordered_quantity: item.ordered_quantity,
+        uom_id: item.uom_id ?? null,
         unit_cost: item.unit_cost,
         line_total: 0,
       }))

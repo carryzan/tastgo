@@ -3,6 +3,14 @@
 import { useMemo, useState, useTransition } from 'react'
 import { PlusIcon, TrashIcon } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useKitchen } from '@/hooks/use-kitchen'
+import {
+  buildInventoryUomOptions,
+  defaultUomId,
+  fetchInventoryUomConversions,
+  type InventoryUomConversion,
+  type KitchenUom,
+} from '@/lib/uom-conversions'
 import {
   saveModifierGroupOptions,
   type ModifierOptionType,
@@ -53,6 +61,7 @@ interface LocalOption {
   inventory_item_id: string
   removed_inventory_item_id: string
   quantity: string
+  uom_id: string
   price_charge: string
   is_active: boolean
 }
@@ -72,6 +81,7 @@ function newLocalOption(): LocalOption {
     inventory_item_id: '',
     removed_inventory_item_id: '',
     quantity: '',
+    uom_id: '',
     price_charge: '0',
     is_active: true,
   }
@@ -88,6 +98,8 @@ export function ManageModifierOptionsSheet({
   open,
   onOpenChange,
 }: ManageModifierOptionsSheetProps) {
+  const { unitsOfMeasure } = useKitchen()
+  const uoms = unitsOfMeasure as KitchenUom[]
   const queryClient = useQueryClient()
   const [draftOptions, setDraftOptions] = useState<LocalOption[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -102,6 +114,11 @@ export function ManageModifierOptionsSheet({
   const { data: fetchedOptions = [], isError: optionsLoadError } = useQuery({
     queryKey: ['modifier-options', group.id, group.kitchen_id],
     queryFn: () => fetchModifierOptions(group.id, group.kitchen_id),
+    enabled: open,
+  })
+  const { data: uomConversions = [] } = useQuery<InventoryUomConversion[]>({
+    queryKey: ['inventory-uom-conversions', group.kitchen_id],
+    queryFn: () => fetchInventoryUomConversions(group.kitchen_id),
     enabled: open,
   })
 
@@ -126,6 +143,7 @@ export function ManageModifierOptionsSheet({
             option.removed_inventory_item_id ?? ''
           ),
           quantity: option.quantity == null ? '' : String(option.quantity),
+          uom_id: String(option.uom_id ?? ''),
           price_charge: String(option.price_charge ?? '0'),
           is_active: Boolean(option.is_active),
         }
@@ -171,6 +189,9 @@ export function ManageModifierOptionsSheet({
         if (!o.inventory_item_id) {
           return `Option "${o.name}": select an inventory item for ${o.type} type.`
         }
+        if (!o.uom_id) {
+          return `Option "${o.name}": configure and select a modifier UOM.`
+        }
       }
       if (o.type === 'removal' || o.type === 'substitution') {
         if (!o.removed_inventory_item_id) {
@@ -212,6 +233,7 @@ export function ManageModifierOptionsSheet({
               : o.quantity.trim() === ''
                 ? null
                 : Number.parseFloat(o.quantity),
+          uom_id: o.uom_id || null,
           price_charge: Number.parseFloat(o.price_charge),
           is_active: o.is_active,
         }))
@@ -277,6 +299,7 @@ export function ManageModifierOptionsSheet({
                 <col />
                 <col />
                 <col className="w-16" />
+                <col className="w-24" />
                 <col className="w-20" />
                 <col className="w-14" />
                 <col className="w-12" />
@@ -299,6 +322,9 @@ export function ManageModifierOptionsSheet({
                     Qty
                   </th>
                   <th className="px-2 py-2 text-left font-medium text-muted-foreground">
+                    UOM
+                  </th>
+                  <th className="px-2 py-2 text-left font-medium text-muted-foreground">
                     Price
                   </th>
                   <th className="px-2 py-2 text-left font-medium text-muted-foreground">
@@ -311,7 +337,7 @@ export function ManageModifierOptionsSheet({
                 {options.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={8}
+                      colSpan={9}
                       className="py-8 pl-4 text-center text-sm text-muted-foreground"
                     >
                       No options yet. Add one to get started.
@@ -333,7 +359,13 @@ export function ManageModifierOptionsSheet({
                         <Select
                           value={o.type}
                           onValueChange={(v) =>
-                            updateOption(idx, { type: v as ModifierOptionType })
+                            updateOption(idx, {
+                              type: v as ModifierOptionType,
+                              uom_id:
+                                v === 'addition' || v === 'substitution'
+                                  ? o.uom_id
+                                  : '',
+                            })
                           }
                         >
                           <SelectTrigger className="w-full">
@@ -354,9 +386,21 @@ export function ManageModifierOptionsSheet({
                             items={invIds}
                             value={o.inventory_item_id || null}
                             onValueChange={(next) =>
-                              updateOption(idx, {
-                                inventory_item_id: next ?? '',
-                              })
+                              {
+                                const inventoryItem =
+                                  inventoryItems.find((item) => item.id === next) ?? null
+                                updateOption(idx, {
+                                  inventory_item_id: next ?? '',
+                                  uom_id: defaultUomId(
+                                    buildInventoryUomOptions(
+                                      inventoryItem,
+                                      uomConversions,
+                                      uoms,
+                                      'modifier'
+                                    )
+                                  ),
+                                })
+                              }
                             }
                             modal
                             itemToStringLabel={(id) =>
@@ -426,6 +470,42 @@ export function ManageModifierOptionsSheet({
                             }
                             placeholder="0"
                           />
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-2 py-1.5">
+                        {o.type === 'addition' || o.type === 'substitution' ? (
+                          <Select
+                            value={o.uom_id || undefined}
+                            onValueChange={(value) =>
+                              updateOption(idx, { uom_id: value })
+                            }
+                            disabled={
+                              buildInventoryUomOptions(
+                                inventoryItems.find((item) => item.id === o.inventory_item_id),
+                                uomConversions,
+                                uoms,
+                                'modifier'
+                              ).length === 0
+                            }
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="UOM" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {buildInventoryUomOptions(
+                                inventoryItems.find((item) => item.id === o.inventory_item_id),
+                                uomConversions,
+                                uoms,
+                                'modifier'
+                              ).map((uom) => (
+                                <SelectItem key={uom.uom_id} value={uom.uom_id}>
+                                  {uom.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}

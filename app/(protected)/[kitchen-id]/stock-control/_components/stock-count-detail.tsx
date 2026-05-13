@@ -3,8 +3,19 @@
 import { useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { useQuery } from '@tanstack/react-query'
 import { CheckIcon, ChevronDownIcon } from 'lucide-react'
 import { useKitchen } from '@/hooks/use-kitchen'
+import {
+  buildInventoryUomOptions,
+  buildProductionRecipeUomOptions,
+  defaultUomId,
+  fetchInventoryUomConversions,
+  fetchProductionRecipeUomConversions,
+  type InventoryUomConversion,
+  type KitchenUom,
+  type ProductionRecipeUomConversion,
+} from '@/lib/uom-conversions'
 import { SiteHeader } from '@/components/layout/site-header'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -15,6 +26,13 @@ import {
 } from '@/components/ui/collapsible'
 import { FieldError } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
 import {
   Table,
@@ -41,6 +59,7 @@ interface StockCountDetailProps {
 
 interface EditableStockCountItem extends StockCountDetailItem {
   draftQuantity: string
+  draftUomId: string
   draftReason: string
 }
 
@@ -98,6 +117,7 @@ function toEditable(item: StockCountDetailItem): EditableStockCountItem {
   return {
     ...item,
     draftQuantity: String(item.counted_quantity),
+    draftUomId: '',
     draftReason: item.adjustment_reason ?? '',
   }
 }
@@ -112,12 +132,21 @@ export function StockCountDetail({
   session,
   items: initialItems,
 }: StockCountDetailProps) {
-  const { permissions } = useKitchen()
+  const { permissions, unitsOfMeasure } = useKitchen()
+  const uoms = unitsOfMeasure as KitchenUom[]
   const router = useRouter()
   const [items, setItems] = useState(() => initialItems.map(toEditable))
   const [savingId, setSavingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [completePending, startCompleteTransition] = useTransition()
+  const { data: inventoryUomConversions = [] } = useQuery<InventoryUomConversion[]>({
+    queryKey: ['inventory-uom-conversions', kitchenId],
+    queryFn: () => fetchInventoryUomConversions(kitchenId),
+  })
+  const { data: productionUomConversions = [] } = useQuery<ProductionRecipeUomConversion[]>({
+    queryKey: ['production-recipe-uom-conversions', kitchenId],
+    queryFn: () => fetchProductionRecipeUomConversions(kitchenId),
+  })
 
   const isReadOnly =
     session.status === 'completed' || !permissions.has('stock_count.update')
@@ -137,7 +166,7 @@ export function StockCountDetail({
 
   function updateDraft(
     itemId: string,
-    patch: Partial<Pick<EditableStockCountItem, 'draftQuantity' | 'draftReason'>>
+    patch: Partial<Pick<EditableStockCountItem, 'draftQuantity' | 'draftUomId' | 'draftReason'>>
   ) {
     setItems((prev) =>
       prev.map((item) =>
@@ -153,6 +182,31 @@ export function StockCountDetail({
       setError('Counted quantity must be 0 or greater.')
       return
     }
+    const uomOptions =
+      item.stock?.item_type === 'inventory_item'
+        ? buildInventoryUomOptions(
+            {
+              id: item.stock.inventory_item_id ?? '',
+              storage_uom_id: item.stock.storage_uom_id,
+            },
+            inventoryUomConversions,
+            uoms,
+            'count'
+          )
+        : buildProductionRecipeUomOptions(
+            {
+              id: item.stock?.production_recipe_id ?? '',
+              storage_uom_id: item.stock?.storage_uom_id ?? null,
+            },
+            productionUomConversions,
+            uoms,
+            'count'
+          )
+    const countedUomId = item.draftUomId || defaultUomId(uomOptions)
+    if (!countedUomId) {
+      setError('Configure a count UOM before saving this item.')
+      return
+    }
 
     setSavingId(item.id)
     try {
@@ -160,7 +214,8 @@ export function StockCountDetail({
         kitchenId,
         item.id,
         quantity,
-        item.draftReason.trim() || null
+        item.draftReason.trim() || null,
+        countedUomId
       )
       if (result instanceof Error) {
         setError(result.message)
@@ -185,6 +240,7 @@ export function StockCountDetail({
                 counted_at: result.counted_at,
                 counted_by: result.counted_by,
                 draftQuantity: String(result.counted_quantity),
+                draftUomId: countedUomId,
                 draftReason: result.adjustment_reason ?? '',
               }
             : row
@@ -305,11 +361,34 @@ export function StockCountDetail({
                       </TableHeader>
                       <TableBody>
                         {groupItems.map((item) => {
+                          const uom = item.stock?.count_uom_label
+                          const uomOptions =
+                            item.stock?.item_type === 'inventory_item'
+                              ? buildInventoryUomOptions(
+                                  {
+                                    id: item.stock.inventory_item_id ?? '',
+                                    storage_uom_id: item.stock.storage_uom_id,
+                                  },
+                                  inventoryUomConversions,
+                                  uoms,
+                                  'count'
+                                )
+                              : buildProductionRecipeUomOptions(
+                                  {
+                                    id: item.stock?.production_recipe_id ?? '',
+                                    storage_uom_id: item.stock?.storage_uom_id ?? null,
+                                  },
+                                  productionUomConversions,
+                                  uoms,
+                                  'count'
+                                )
+                          const selectedUomId =
+                            item.draftUomId || defaultUomId(uomOptions)
                           const dirty =
                             item.counted_at === null ||
                             item.draftQuantity !== String(item.counted_quantity) ||
-                            item.draftReason !== (item.adjustment_reason ?? '')
-                          const uom = item.stock?.count_uom_label
+                            item.draftReason !== (item.adjustment_reason ?? '') ||
+                            item.draftUomId !== ''
                           const missingInventoryUom =
                             item.stock?.item_type === 'inventory_item' && !uom
                           return (
@@ -354,10 +433,25 @@ export function StockCountDetail({
                                     disabled={isReadOnly || savingId === item.id}
                                     className="w-28"
                                   />
-                                  {uom ? (
-                                    <span className="text-xs text-muted-foreground">
-                                      {uom}
-                                    </span>
+                                  {uomOptions.length > 0 ? (
+                                    <Select
+                                      value={selectedUomId || undefined}
+                                      onValueChange={(value) =>
+                                        updateDraft(item.id, { draftUomId: value })
+                                      }
+                                      disabled={isReadOnly || savingId === item.id}
+                                    >
+                                      <SelectTrigger className="w-24">
+                                        <SelectValue placeholder="UOM" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {uomOptions.map((option) => (
+                                          <SelectItem key={option.uom_id} value={option.uom_id}>
+                                            {option.label}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
                                   ) : missingInventoryUom ? (
                                     <Badge variant="outline">No UOM</Badge>
                                   ) : (

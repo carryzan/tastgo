@@ -9,6 +9,7 @@ interface CreateBatchData {
   recipe_version_id: string
   service_period_id: string | null
   target_quantity: number
+  target_uom_id: string
   created_by: string
 }
 
@@ -22,12 +23,13 @@ export async function createBatch(data: CreateBatchData) {
 export async function completeBatch(
   id: string,
   kitchenId: string,
-  actualQuantity: number
+  actualQuantity: number,
+  actualUomId: string
 ) {
   const supabase = await createClient()
   const { error } = await supabase
     .from('production_batches')
-    .update({ actual_quantity: actualQuantity })
+    .update({ actual_quantity: actualQuantity, actual_uom_id: actualUomId })
     .eq('id', id)
     .eq('kitchen_id', kitchenId)
 

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { XIcon } from 'lucide-react'
+import { useKitchen } from '@/hooks/use-kitchen'
 import type { InventoryCategory } from '../_lib/inventory-categories'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -42,6 +43,7 @@ export interface InventoryItemFormValues {
   name: string
   category_id: string | null
   image_url: string | null
+  storage_uom_id: string | null
   yield_percentage: number
   par_level: number | null
   min_level: number | null
@@ -73,6 +75,8 @@ export function InventoryItemForm({
   afterFields,
   children,
 }: InventoryItemFormProps) {
+  const { unitsOfMeasure } = useKitchen()
+  const uoms = unitsOfMeasure as { id: string; name: string; abbreviation: string }[]
   const selectableCategories = useMemo(() => {
     const active = categories.filter((c) => c.is_active)
     const currentId = defaultValues?.category_id
@@ -100,6 +104,9 @@ export function InventoryItemForm({
   )
   const [cycleCount, setCycleCount] = useState<string>(
     defaultValues?.cycle_count_frequency ?? '__none__'
+  )
+  const [storageUomId, setStorageUomId] = useState<string>(
+    defaultValues?.storage_uom_id ?? '__none__'
   )
 
   const isEdit = !!defaultValues?.id
@@ -212,6 +219,33 @@ export function InventoryItemForm({
             </FieldDescription>
           </Field>
 
+          <Field>
+            <FieldLabel htmlFor="item-storage-uom">Storage UOM</FieldLabel>
+            <input
+              type="hidden"
+              name="storage_uom_id"
+              value={storageUomId === '__none__' ? '' : storageUomId}
+            />
+            <Select value={storageUomId} onValueChange={setStorageUomId}>
+              <SelectTrigger id="item-storage-uom" className="w-full">
+                <SelectValue placeholder="Select storage UOM" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="__none__">Configure later</SelectItem>
+                  {uoms.map((uom) => (
+                    <SelectItem key={uom.id} value={uom.id}>
+                      {uom.name} ({uom.abbreviation})
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            <FieldDescription>
+              Stock ledger quantities are stored in this unit.
+            </FieldDescription>
+          </Field>
+
           <div className="grid grid-cols-3 gap-3">
             <Field>
               <FieldLabel htmlFor="item-min">Min Level</FieldLabel>
@@ -295,6 +329,8 @@ export function parseFormValues(form: HTMLFormElement): Omit<InventoryItemFormVa
   const name = fd.get('name') as string
   const categoryRaw = fd.get('category_id') as string
   const category_id = categoryRaw || null
+  const storageRaw = fd.get('storage_uom_id') as string
+  const storage_uom_id = storageRaw || null
   const yield_percentage = parseFloat(fd.get('yield_percentage') as string) || 100
   const par_level = fd.get('par_level') ? parseFloat(fd.get('par_level') as string) : null
   const min_level = fd.get('min_level') ? parseFloat(fd.get('min_level') as string) : null
@@ -307,6 +343,7 @@ export function parseFormValues(form: HTMLFormElement): Omit<InventoryItemFormVa
   return {
     name,
     category_id,
+    storage_uom_id,
     yield_percentage,
     par_level,
     min_level,

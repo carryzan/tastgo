@@ -3,38 +3,33 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 
-export interface UomConversionInput {
+export interface ProductionRecipeUomConversionInput {
   id?: string
   uom_id: string
   factor_to_storage: number
-  allow_purchase: boolean
+  allow_production: boolean
   allow_recipe: boolean
-  allow_modifier: boolean
   allow_count: boolean
   allow_waste: boolean
-  allow_return: boolean
   allow_opening: boolean
-  is_default_purchase: boolean
+  is_default_production: boolean
   is_default_recipe: boolean
-  is_default_modifier: boolean
   is_default_count: boolean
   is_default_waste: boolean
-  is_default_return: boolean
   is_default_opening: boolean
-  is_active: boolean
 }
 
-export async function saveInventoryUomConfiguration(data: {
+export async function saveProductionRecipeUomConfiguration(data: {
   kitchen_id: string
-  inventory_item_id: string
+  production_recipe_id: string
   storage_uom_id: string
-  conversions: UomConversionInput[]
+  conversions: ProductionRecipeUomConversionInput[]
 }) {
   const supabase = await createClient()
 
-  const { error } = await supabase.rpc('save_inventory_item_uom_configuration', {
+  const { error } = await supabase.rpc('save_production_recipe_uom_configuration', {
     p_kitchen_id: data.kitchen_id,
-    p_inventory_item_id: data.inventory_item_id,
+    p_production_recipe_id: data.production_recipe_id,
     p_storage_uom_id: data.storage_uom_id,
     p_conversions: data.conversions,
   })

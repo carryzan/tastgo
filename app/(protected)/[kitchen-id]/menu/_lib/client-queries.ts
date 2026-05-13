@@ -4,16 +4,19 @@ export interface InventoryItemPick {
   id: string
   name: string
   yield_percentage: number
+  storage_uom_id: string | null
 }
 
 export interface InventoryItemBasicPick {
   id: string
   name: string
+  storage_uom_id: string | null
 }
 
 export interface ProductionRecipePick {
   id: string
   name: string
+  storage_uom_id: string | null
 }
 
 export interface MenuItemPick {
@@ -52,7 +55,7 @@ export async function fetchActiveInventoryItems(kitchenId: string) {
   const supabase = createClient()
   const { data, error } = await supabase
     .from('inventory_items')
-    .select('id, name, yield_percentage')
+    .select('id, name, yield_percentage, storage_uom_id')
     .eq('kitchen_id', kitchenId)
     .eq('is_active', true)
     .order('name')
@@ -64,7 +67,7 @@ export async function fetchActiveInventoryItemPicks(kitchenId: string) {
   const supabase = createClient()
   const { data, error } = await supabase
     .from('inventory_items')
-    .select('id, name')
+    .select('id, name, storage_uom_id')
     .eq('kitchen_id', kitchenId)
     .eq('is_active', true)
     .order('name')
@@ -76,9 +79,10 @@ export async function fetchActiveProductionRecipes(kitchenId: string) {
   const supabase = createClient()
   const { data, error } = await supabase
     .from('production_recipes')
-    .select('id, name')
+    .select('id, name, storage_uom_id')
     .eq('kitchen_id', kitchenId)
     .eq('is_active', true)
+    .eq('track_stock', true)
     .not('current_version_id', 'is', null)
     .order('name')
   if (error) throw new Error(error.message)

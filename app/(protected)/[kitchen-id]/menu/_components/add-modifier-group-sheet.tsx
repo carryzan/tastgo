@@ -3,6 +3,14 @@
 import { useEffect, useMemo, useState, useTransition } from 'react'
 import { PlusIcon, TrashIcon } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
+import { useKitchen } from '@/hooks/use-kitchen'
+import {
+  buildInventoryUomOptions,
+  defaultUomId,
+  fetchInventoryUomConversions,
+  type InventoryUomConversion,
+  type KitchenUom,
+} from '@/lib/uom-conversions'
 import { createModifierGroup } from '../_lib/modifier-group-actions'
 import { MODIFIER_GROUPS_QUERY_KEY } from '../_lib/queries'
 import { mapMenuDbError } from '../_lib/db-errors'
@@ -54,6 +62,7 @@ interface LocalOption {
   inventory_item_id: string
   removed_inventory_item_id: string
   quantity: string
+  uom_id: string
   price_charge: string
   is_active: boolean
 }
@@ -79,6 +88,7 @@ function createOption(): LocalOption {
     inventory_item_id: '',
     removed_inventory_item_id: '',
     quantity: '',
+    uom_id: '',
     price_charge: '0',
     is_active: true,
   }
@@ -89,10 +99,13 @@ export function AddModifierGroupSheet({
   onOpenChange,
   kitchenId,
 }: AddModifierGroupSheetProps) {
+  const { unitsOfMeasure } = useKitchen()
+  const uoms = unitsOfMeasure as KitchenUom[]
   const brands = useMenuBrandOptions()
   const queryClient = useQueryClient()
 
   const [inventoryItems, setInventoryItems] = useState<InventoryItemBasicPick[]>([])
+  const [uomConversions, setUomConversions] = useState<InventoryUomConversion[]>([])
   const [brandOverride, setBrandOverride] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [minSelections, setMinSelections] = useState('0')
@@ -119,8 +132,14 @@ export function AddModifierGroupSheet({
   useEffect(() => {
     if (!open) return
 
-    fetchActiveInventoryItemPicks(kitchenId)
-      .then((items) => setInventoryItems(items))
+    Promise.all([
+      fetchActiveInventoryItemPicks(kitchenId),
+      fetchInventoryUomConversions(kitchenId),
+    ])
+      .then(([items, conversions]) => {
+        setInventoryItems(items)
+        setUomConversions(conversions)
+      })
       .catch(() => setError('Failed to load inventory items.'))
   }, [open, kitchenId])
 
@@ -173,6 +192,9 @@ export function AddModifierGroupSheet({
         }
         if (!option.inventory_item_id) {
           return `Option "${option.name || 'Untitled'}": select an inventory item for ${option.type} type.`
+        }
+        if (!option.uom_id) {
+          return `Option "${option.name || 'Untitled'}": configure and select a modifier UOM.`
         }
       }
 
@@ -236,6 +258,7 @@ export function AddModifierGroupSheet({
               option.quantity.trim() === ''
                 ? null
                 : Number.parseFloat(option.quantity),
+            uom_id: option.uom_id || null,
             price_charge: Number.parseFloat(option.price_charge),
             is_active: option.is_active,
           })),
@@ -343,6 +366,7 @@ export function AddModifierGroupSheet({
                 <col />
                 <col className="w-20" />
                 <col className="w-24" />
+                <col className="w-24" />
                 <col className="w-16" />
                 <col className="w-12" />
               </colgroup>
@@ -364,6 +388,9 @@ export function AddModifierGroupSheet({
                     Qty
                   </th>
                   <th className="px-2 py-2 text-left font-medium text-muted-foreground">
+                    UOM
+                  </th>
+                  <th className="px-2 py-2 text-left font-medium text-muted-foreground">
                     Price
                   </th>
                   <th className="px-2 py-2 text-left font-medium text-muted-foreground">
@@ -376,7 +403,7 @@ export function AddModifierGroupSheet({
                 {options.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={8}
+                      colSpan={9}
                       className="h-32 px-4 text-center text-muted-foreground"
                     >
                       No options yet. Add at least one active option before
@@ -407,6 +434,11 @@ export function AddModifierGroupSheet({
                                 nextValue === 'substitution'
                                   ? option.inventory_item_id
                                   : '',
+                              uom_id:
+                                nextValue === 'addition' ||
+                                nextValue === 'substitution'
+                                  ? option.uom_id
+                                  : '',
                               removed_inventory_item_id:
                                 nextValue === 'removal' ||
                                 nextValue === 'substitution'
@@ -435,9 +467,21 @@ export function AddModifierGroupSheet({
                             items={inventoryIds}
                             value={option.inventory_item_id || null}
                             onValueChange={(nextValue) =>
-                              updateOption(index, {
-                                inventory_item_id: nextValue ?? '',
-                              })
+                              {
+                                const inventoryItem =
+                                  inventoryItems.find((item) => item.id === nextValue) ?? null
+                                updateOption(index, {
+                                  inventory_item_id: nextValue ?? '',
+                                  uom_id: defaultUomId(
+                                    buildInventoryUomOptions(
+                                      inventoryItem,
+                                      uomConversions,
+                                      uoms,
+                                      'modifier'
+                                    )
+                                  ),
+                                })
+                              }
                             }
                             modal
                             itemToStringLabel={(id) =>
@@ -514,6 +558,44 @@ export function AddModifierGroupSheet({
                           }
                           disabled={pending}
                         />
+                      </td>
+                      <td className="px-2 py-1.5">
+                        {option.type === 'addition' ||
+                        option.type === 'substitution' ? (
+                          <Select
+                            value={option.uom_id || undefined}
+                            onValueChange={(value) =>
+                              updateOption(index, { uom_id: value })
+                            }
+                            disabled={
+                              pending ||
+                              buildInventoryUomOptions(
+                                inventoryItems.find((item) => item.id === option.inventory_item_id),
+                                uomConversions,
+                                uoms,
+                                'modifier'
+                              ).length === 0
+                            }
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="UOM" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {buildInventoryUomOptions(
+                                inventoryItems.find((item) => item.id === option.inventory_item_id),
+                                uomConversions,
+                                uoms,
+                                'modifier'
+                              ).map((uom) => (
+                                <SelectItem key={uom.uom_id} value={uom.uom_id}>
+                                  {uom.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
                       </td>
                       <td className="px-2 py-1.5">
                         <Input

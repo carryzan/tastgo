@@ -10,4 +10,4 @@ export const BATCHES_QUERY_KEY = ['production-batches']
 export const BATCHES_FROM = 'production_batches'
 // Explicit FK-column hints on every embed to avoid ambiguity.
 export const BATCHES_SELECT =
-  '*, production_recipes!production_recipe_id(id, name), production_recipe_versions!recipe_version_id(id, version_number), production_service_periods!service_period_id(id, name)'
+  '*, production_recipes!production_recipe_id(id, name, storage_uom_id), production_recipe_versions!recipe_version_id(id, version_number), production_service_periods!service_period_id(id, name)'

@@ -16,6 +16,7 @@ export interface ModifierOptionInput {
   inventory_item_id: string | null
   removed_inventory_item_id: string | null
   quantity: number | null
+  uom_id: string | null
   price_charge: number
   is_active: boolean
 }
@@ -59,6 +60,7 @@ export async function saveModifierGroupOptions(
       inventory_item_id: opt.inventory_item_id,
       removed_inventory_item_id: opt.removed_inventory_item_id,
       quantity: opt.quantity,
+      uom_id: opt.uom_id,
       price_charge: opt.price_charge,
       is_active: opt.is_active,
     }

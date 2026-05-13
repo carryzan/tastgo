@@ -5,6 +5,13 @@ import { PlusIcon, TrashIcon } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useKitchen } from '@/hooks/use-kitchen'
 import { createClient } from '@/lib/supabase/client'
+import {
+  buildInventoryUomOptions,
+  defaultUomId,
+  fetchInventoryUomConversions,
+  type InventoryUomConversion,
+  type KitchenUom,
+} from '@/lib/uom-conversions'
 import { createRecipeVersion } from '../_lib/recipe-actions'
 import { RECIPES_QUERY_KEY } from '../_lib/queries'
 import type { Recipe } from './recipe-columns'
@@ -41,12 +48,7 @@ import { FieldError } from '@/components/ui/field'
 interface InventoryItem {
   id: string
   name: string
-}
-
-interface UOM {
-  id: string
-  name: string
-  abbreviation: string
+  storage_uom_id: string | null
 }
 
 interface ComponentRow {
@@ -67,10 +69,11 @@ export function AddVersionSheet({
   onOpenChange,
 }: AddVersionSheetProps) {
   const { kitchen, unitsOfMeasure } = useKitchen()
-  const uoms = unitsOfMeasure as UOM[]
+  const uoms = unitsOfMeasure as KitchenUom[]
   const queryClient = useQueryClient()
 
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([])
+  const [uomConversions, setUomConversions] = useState<InventoryUomConversion[]>([])
   const [components, setComponents] = useState<ComponentRow[]>([])
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
@@ -78,13 +81,18 @@ export function AddVersionSheet({
   useEffect(() => {
     if (!open) return
     const supabase = createClient()
-    supabase
+    Promise.all([
+      supabase
       .from('inventory_items')
-      .select('id, name')
+      .select('id, name, storage_uom_id')
       .eq('kitchen_id', kitchen.id)
       .eq('is_active', true)
-      .order('name')
-      .then(({ data }) => setInventoryItems((data ?? []) as InventoryItem[]))
+      .order('name'),
+      fetchInventoryUomConversions(kitchen.id),
+    ]).then(([itemsResult, conversions]) => {
+      setInventoryItems((itemsResult.data ?? []) as InventoryItem[])
+      setUomConversions(conversions)
+    })
   }, [open, kitchen.id])
 
   const inventoryItemIds = useMemo(
@@ -112,7 +120,7 @@ export function AddVersionSheet({
   function addIngredient() {
     setComponents((prev) => [
       ...prev,
-      { inventory_item_id: '', recipe_quantity: '', uom_id: uoms[0]?.id ?? '' },
+      { inventory_item_id: '', recipe_quantity: '', uom_id: '' },
     ])
   }
 
@@ -241,11 +249,28 @@ export function AddVersionSheet({
                             items={inventoryItemIds}
                             value={comp.inventory_item_id || null}
                             onValueChange={(next) =>
-                              updateIngredient(
-                                i,
-                                'inventory_item_id',
-                                next ?? ''
-                              )
+                              {
+                                const inventoryItem =
+                                  inventoryItems.find((item) => item.id === next) ?? null
+                                setComponents((prev) =>
+                                  prev.map((component, index) =>
+                                    index === i
+                                      ? {
+                                          ...component,
+                                          inventory_item_id: next ?? '',
+                                          uom_id: defaultUomId(
+                                            buildInventoryUomOptions(
+                                              inventoryItem,
+                                              uomConversions,
+                                              uoms,
+                                              'recipe'
+                                            )
+                                          ),
+                                        }
+                                      : component
+                                  )
+                                )
+                              }
                             }
                             modal={true}
                             itemToStringLabel={(id) =>
@@ -282,23 +307,34 @@ export function AddVersionSheet({
                         />
                       </td>
                       <td className="px-2 py-1.5">
+                        {(() => {
+                          const options = buildInventoryUomOptions(
+                            inventoryItems.find((item) => item.id === comp.inventory_item_id),
+                            uomConversions,
+                            uoms,
+                            'recipe'
+                          )
+                          return (
                         <Select
                           value={comp.uom_id}
                           onValueChange={(v) => updateIngredient(i, 'uom_id', v)}
+                          disabled={options.length === 0}
                         >
                           <SelectTrigger className="w-full">
                             <SelectValue placeholder="UOM" />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectGroup>
-                              {uoms.map((u) => (
-                                <SelectItem key={u.id} value={u.id}>
-                                  {u.abbreviation}
+                              {options.map((u) => (
+                                <SelectItem key={u.uom_id} value={u.uom_id}>
+                                  {u.label}
                                 </SelectItem>
                               ))}
                             </SelectGroup>
                           </SelectContent>
                         </Select>
+                          )
+                        })()}
                       </td>
                       <td className="py-1.5 pl-1 pr-3">
                         <Button

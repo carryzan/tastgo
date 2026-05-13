@@ -3,6 +3,17 @@
 import { useMemo, useState, useTransition } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useKitchen } from '@/hooks/use-kitchen'
+import {
+  buildInventoryUomOptions,
+  buildProductionRecipeUomOptions,
+  defaultUomId,
+  fetchInventoryUomConversions,
+  fetchProductionRecipeUomConversions,
+  type InventoryUomConversion,
+  type KitchenUom,
+  type ProductionRecipeUomConversion,
+  type UomOption,
+} from '@/lib/uom-conversions'
 import { recordWasteLog } from '../_lib/actions'
 import {
   COUNTABLE_STOCK_QUERY_KEY,
@@ -37,9 +48,11 @@ export function RecordWasteSheet({
   open,
   onOpenChange,
 }: RecordWasteSheetProps) {
-  const { kitchen } = useKitchen()
+  const { kitchen, unitsOfMeasure } = useKitchen()
+  const uoms = unitsOfMeasure as KitchenUom[]
   const queryClient = useQueryClient()
   const [itemId, setItemId] = useState('')
+  const [uomId, setUomId] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
@@ -49,18 +62,52 @@ export function RecordWasteSheet({
     enabled: open,
   })
 
+  const { data: inventoryUomConversions = [] } = useQuery<InventoryUomConversion[]>({
+    queryKey: ['inventory-uom-conversions', kitchen.id],
+    queryFn: () => fetchInventoryUomConversions(kitchen.id),
+    enabled: open,
+  })
+
+  const { data: productionUomConversions = [] } = useQuery<ProductionRecipeUomConversion[]>({
+    queryKey: ['production-recipe-uom-conversions', kitchen.id],
+    queryFn: () => fetchProductionRecipeUomConversions(kitchen.id),
+    enabled: open,
+  })
+
   const availableRows = useMemo(
     () => stockRows.filter((row) => Number(row.current_quantity) > 0),
     [stockRows]
   )
 
   const selectedItem = availableRows.find((row) => row.id === itemId) ?? null
+  const selectedUomOptions: UomOption[] = selectedItem
+    ? selectedItem.item_type === 'inventory_item'
+      ? buildInventoryUomOptions(
+          {
+            id: selectedItem.inventory_item_id ?? '',
+            storage_uom_id: selectedItem.storage_uom_id,
+          },
+          inventoryUomConversions,
+          uoms,
+          'waste'
+        )
+      : buildProductionRecipeUomOptions(
+          {
+            id: selectedItem.production_recipe_id ?? '',
+            storage_uom_id: selectedItem.storage_uom_id,
+          },
+          productionUomConversions,
+          uoms,
+          'waste'
+        )
+    : []
 
   function handleOpenChange(next: boolean) {
     if (pending) return
     onOpenChange(next)
     if (!next) {
       setItemId('')
+      setUomId('')
       setError(null)
     }
   }
@@ -74,10 +121,12 @@ export function RecordWasteSheet({
     const reason = String(fd.get('reason') ?? '').trim()
 
     if (!selectedItem) return setError('Select an item.')
+    const selectedUom = selectedUomOptions.find((option) => option.uom_id === uomId)
+    if (!selectedUom) return setError('Configure and select a waste UOM.')
     if (!quantity || quantity <= 0) {
       return setError('Quantity must be greater than 0.')
     }
-    if (quantity > Number(selectedItem.current_quantity)) {
+    if (quantity * selectedUom.factor_to_storage > Number(selectedItem.current_quantity)) {
       return setError('Quantity exceeds current stock.')
     }
 
@@ -89,6 +138,7 @@ export function RecordWasteSheet({
           inventoryItemId: selectedItem.inventory_item_id,
           productionRecipeId: selectedItem.production_recipe_id,
           quantity,
+          uomId,
           reason: reason || null,
         })
         if (result instanceof Error) return setError(result.message)
@@ -124,7 +174,35 @@ export function RecordWasteSheet({
           <FieldGroup>
             <Field>
               <FieldLabel>Item</FieldLabel>
-              <Select value={itemId} onValueChange={setItemId} disabled={pending}>
+              <Select
+                value={itemId}
+                onValueChange={(value) => {
+                  const nextItem = availableRows.find((row) => row.id === value) ?? null
+                  const options =
+                    nextItem?.item_type === 'inventory_item'
+                      ? buildInventoryUomOptions(
+                          {
+                            id: nextItem.inventory_item_id ?? '',
+                            storage_uom_id: nextItem.storage_uom_id,
+                          },
+                          inventoryUomConversions,
+                          uoms,
+                          'waste'
+                        )
+                      : buildProductionRecipeUomOptions(
+                          {
+                            id: nextItem?.production_recipe_id ?? '',
+                            storage_uom_id: nextItem?.storage_uom_id ?? null,
+                          },
+                          productionUomConversions,
+                          uoms,
+                          'waste'
+                        )
+                  setItemId(value)
+                  setUomId(defaultUomId(options))
+                }}
+                disabled={pending}
+              >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select item" />
                 </SelectTrigger>
@@ -151,6 +229,26 @@ export function RecordWasteSheet({
                 disabled={pending}
                 required
               />
+            </Field>
+
+            <Field>
+              <FieldLabel>UOM</FieldLabel>
+              <Select
+                value={uomId || undefined}
+                onValueChange={setUomId}
+                disabled={pending || !selectedItem || selectedUomOptions.length === 0}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Configure UOM first" />
+                </SelectTrigger>
+                <SelectContent>
+                  {selectedUomOptions.map((option) => (
+                    <SelectItem key={option.uom_id} value={option.uom_id}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </Field>
 
             <Field>

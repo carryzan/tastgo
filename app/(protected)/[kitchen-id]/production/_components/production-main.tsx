@@ -19,6 +19,7 @@ import { AddRecipeDialog } from './add-recipe-dialog'
 import { EditRecipeSheet } from './edit-recipe-dialog'
 import { VersionHistorySheet } from './version-history-sheet'
 import { AddVersionSheet } from './add-version-sheet'
+import { UomConfigSheet } from './uom-config-sheet'
 import { CompleteBatchDialog } from './complete-batch-dialog'
 import { ReverseBatchDialog } from './reverse-batch-dialog'
 import { BatchComponentsSheet } from './batch-components-sheet'
@@ -62,6 +63,7 @@ export function ProductionMain({ initialServicePeriods }: ProductionMainProps) {
   const [deleteRecipe, setDeleteRecipe] = useState<Recipe | null>(null)
   const [versionHistoryRecipe, setVersionHistoryRecipe] = useState<Recipe | null>(null)
   const [newVersionRecipe, setNewVersionRecipe] = useState<Recipe | null>(null)
+  const [uomConfigRecipe, setUomConfigRecipe] = useState<Recipe | null>(null)
 
   const handleEditRecipe = useCallback(
     (row: Row<Recipe>) => setEditRecipe(row.original),
@@ -79,6 +81,10 @@ export function ProductionMain({ initialServicePeriods }: ProductionMainProps) {
     (row: Row<Recipe>) => setNewVersionRecipe(row.original),
     []
   )
+  const handleUomConfig = useCallback(
+    (row: Row<Recipe>) => setUomConfigRecipe(row.original),
+    []
+  )
 
   const recipeColumns = useMemo(
     () =>
@@ -87,8 +93,16 @@ export function ProductionMain({ initialServicePeriods }: ProductionMainProps) {
         onDelete: handleDeleteRecipe,
         onVersionHistory: handleVersionHistory,
         onNewVersion: handleNewVersion,
+        onUomConfig: handleUomConfig,
       }),
-    [permissions, handleEditRecipe, handleDeleteRecipe, handleVersionHistory, handleNewVersion]
+    [
+      permissions,
+      handleEditRecipe,
+      handleDeleteRecipe,
+      handleVersionHistory,
+      handleNewVersion,
+      handleUomConfig,
+    ]
   )
 
   const {
@@ -236,6 +250,15 @@ export function ProductionMain({ initialServicePeriods }: ProductionMainProps) {
           open={!!newVersionRecipe}
           onOpenChange={(next) => {
             if (!next) setNewVersionRecipe(null)
+          }}
+        />
+      )}
+      {uomConfigRecipe && (
+        <UomConfigSheet
+          recipe={uomConfigRecipe}
+          open={!!uomConfigRecipe}
+          onOpenChange={(next) => {
+            if (!next) setUomConfigRecipe(null)
           }}
         />
       )}

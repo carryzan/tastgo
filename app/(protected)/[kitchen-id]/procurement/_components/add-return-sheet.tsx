@@ -3,6 +3,13 @@
 import { useEffect, useMemo, startTransition as deferStateUpdate, useState, useTransition } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useKitchen } from '@/hooks/use-kitchen'
+import {
+  buildInventoryUomOptions,
+  defaultUomId,
+  fetchInventoryUomConversions,
+  type InventoryUomConversion,
+  type KitchenUom,
+} from '@/lib/uom-conversions'
 import { createSupplierReturn } from '../_lib/return-actions'
 import { RETURNS_QUERY_KEY } from '../_lib/queries'
 import {
@@ -50,7 +57,10 @@ interface ReturnLineItem {
   inventory_item_id: string
   batch_id: string
   inventory_item_name: string
+  storage_uom_id: string | null
+  uom_id: string
   received_quantity: string | number
+  storage_quantity: string | number | null
   returned_quantity: string
 }
 
@@ -61,13 +71,16 @@ interface AddReturnSheetProps {
   prefilledSupplierId?: string
 }
 
+const EMPTY_UOM_CONVERSIONS: InventoryUomConversion[] = []
+
 export function AddReturnSheet({
   open,
   onOpenChange,
   prefilledPurchaseId,
   prefilledSupplierId,
 }: AddReturnSheetProps) {
-  const { kitchen } = useKitchen()
+  const { kitchen, unitsOfMeasure } = useKitchen()
+  const uoms = unitsOfMeasure as KitchenUom[]
   const queryClient = useQueryClient()
 
   const [supplierId, setSupplierId] = useState(prefilledSupplierId ?? '')
@@ -94,6 +107,13 @@ export function AddReturnSheet({
     enabled: open && !!purchaseId,
   })
 
+  const { data: uomConversionsData } = useQuery<InventoryUomConversion[]>({
+    queryKey: ['inventory-uom-conversions', kitchen.id],
+    queryFn: () => fetchInventoryUomConversions(kitchen.id),
+    enabled: open,
+  })
+  const uomConversions = uomConversionsData ?? EMPTY_UOM_CONVERSIONS
+
   useEffect(() => {
     deferStateUpdate(() => {
       if (purchaseItemsData) {
@@ -105,7 +125,20 @@ export function AddReturnSheet({
               inventory_item_id: item.inventory_item_id,
               batch_id: item.batch_id ?? '',
               inventory_item_name: item.inventory_items?.name ?? '—',
+              storage_uom_id: item.inventory_items?.storage_uom_id ?? null,
+              uom_id: defaultUomId(
+                buildInventoryUomOptions(
+                  {
+                    id: item.inventory_item_id,
+                    storage_uom_id: item.inventory_items?.storage_uom_id ?? null,
+                  },
+                  uomConversions,
+                  uoms,
+                  'return'
+                )
+              ),
               received_quantity: item.received_quantity ?? item.ordered_quantity,
+              storage_quantity: item.storage_quantity,
               returned_quantity: '',
             }))
         )
@@ -113,7 +146,7 @@ export function AddReturnSheet({
         setReturnItems([])
       }
     })
-  }, [purchaseItemsData])
+  }, [purchaseItemsData, uomConversions, uoms])
 
   function handleOpenChange(next: boolean) {
     if (pending) return
@@ -134,6 +167,12 @@ export function AddReturnSheet({
     )
   }
 
+  function updateReturnUom(index: number, value: string) {
+    setReturnItems((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, uom_id: value } : item))
+    )
+  }
+
   const activeReturnItems = useMemo(
     () => returnItems.filter((item) => item.returned_quantity !== ''),
     [returnItems]
@@ -149,9 +188,21 @@ export function AddReturnSheet({
 
     for (const item of activeReturnItems) {
       const qty = Number(item.returned_quantity)
+      const options = buildInventoryUomOptions(
+        { id: item.inventory_item_id, storage_uom_id: item.storage_uom_id },
+        uomConversions,
+        uoms,
+        'return'
+      )
+      const selectedOption = options.find((option) => option.uom_id === item.uom_id)
+      const availableStorageQuantity = Number(
+        item.storage_quantity ?? item.received_quantity
+      )
       if (Number.isNaN(qty) || qty <= 0)
         return setError('Return quantities must be greater than 0.')
-      if (qty > Number(item.received_quantity))
+      if (!selectedOption)
+        return setError(`Configure a return UOM for ${item.inventory_item_name}.`)
+      if (qty * selectedOption.factor_to_storage > availableStorageQuantity)
         return setError(
           `Return quantity for ${item.inventory_item_name} exceeds received quantity.`
         )
@@ -169,6 +220,7 @@ export function AddReturnSheet({
             inventory_item_id: item.inventory_item_id,
             batch_id: item.batch_id,
             returned_quantity: Number(item.returned_quantity),
+            uom_id: item.uom_id,
           })),
         })
         if (result instanceof Error) return setError(result.message)
@@ -268,48 +320,78 @@ export function AddReturnSheet({
                   <TableRow>
                     <TableHead className="pl-4">Item</TableHead>
                     <TableHead className="w-28">Received</TableHead>
+                    <TableHead className="w-28">UOM</TableHead>
                     <TableHead className="w-32">Return qty</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {itemsLoading ? (
                     <TableRow>
-                      <TableCell colSpan={3} className="px-4 py-3">
+                      <TableCell colSpan={4} className="px-4 py-3">
                         <Skeleton className="h-8 w-full rounded-lg" />
                       </TableCell>
                     </TableRow>
                   ) : returnItems.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={3}
+                        colSpan={4}
                         className="h-24 text-center text-muted-foreground"
                       >
                         No received items found for this purchase.
                       </TableCell>
                     </TableRow>
                   ) : (
-                    returnItems.map((item, index) => (
-                      <TableRow key={item.purchase_item_id}>
-                        <TableCell className="pl-4 font-medium">
-                          {item.inventory_item_name}
-                        </TableCell>
-                        <TableCell className="tabular-nums text-muted-foreground">
-                          {Number(item.received_quantity).toLocaleString()}
-                        </TableCell>
-                        <TableCell className="pr-4">
-                          <Input
-                            type="number"
-                            inputMode="decimal"
-                            min="0"
-                            step="0.0001"
-                            value={item.returned_quantity}
-                            onChange={(e) => updateReturnQty(index, e.target.value)}
-                            disabled={pending}
-                            placeholder="—"
-                          />
-                        </TableCell>
-                      </TableRow>
-                    ))
+                    returnItems.map((item, index) => {
+                      const uomOptions = buildInventoryUomOptions(
+                        {
+                          id: item.inventory_item_id,
+                          storage_uom_id: item.storage_uom_id,
+                        },
+                        uomConversions,
+                        uoms,
+                        'return'
+                      )
+                      return (
+                        <TableRow key={item.purchase_item_id}>
+                          <TableCell className="pl-4 font-medium">
+                            {item.inventory_item_name}
+                          </TableCell>
+                          <TableCell className="tabular-nums text-muted-foreground">
+                            {Number(item.storage_quantity ?? item.received_quantity).toLocaleString()}
+                          </TableCell>
+                          <TableCell>
+                            <Select
+                              value={item.uom_id || undefined}
+                              onValueChange={(value) => updateReturnUom(index, value)}
+                              disabled={pending || uomOptions.length === 0}
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue placeholder="UOM" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {uomOptions.map((option) => (
+                                  <SelectItem key={option.uom_id} value={option.uom_id}>
+                                    {option.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell className="pr-4">
+                            <Input
+                              type="number"
+                              inputMode="decimal"
+                              min="0"
+                              step="0.0001"
+                              value={item.returned_quantity}
+                              onChange={(e) => updateReturnQty(index, e.target.value)}
+                              disabled={pending}
+                              placeholder="—"
+                            />
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })
                   )}
                 </TableBody>
               </Table>

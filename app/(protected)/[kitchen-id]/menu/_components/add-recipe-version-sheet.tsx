@@ -4,6 +4,16 @@ import { useEffect, useMemo, useState, useTransition } from 'react'
 import { PlusIcon, TrashIcon } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useKitchen } from '@/hooks/use-kitchen'
+import {
+  buildInventoryUomOptions,
+  buildProductionRecipeUomOptions,
+  defaultUomId,
+  fetchInventoryUomConversions,
+  fetchProductionRecipeUomConversions,
+  type InventoryUomConversion,
+  type KitchenUom,
+  type ProductionRecipeUomConversion,
+} from '@/lib/uom-conversions'
 import { createMenuItemRecipeVersion } from '../_lib/menu-item-actions'
 import { MENU_ITEMS_QUERY_KEY } from '../_lib/queries'
 import { mapMenuDbError } from '../_lib/db-errors'
@@ -46,12 +56,6 @@ import { FieldError } from '@/components/ui/field'
 
 type ComponentType = 'inventory_item' | 'production_recipe'
 
-interface UOM {
-  id: string
-  name: string
-  abbreviation: string
-}
-
 interface ComponentRow {
   component_type: ComponentType
   inventory_item_id: string
@@ -72,11 +76,13 @@ export function AddRecipeVersionSheet({
   onOpenChange,
 }: AddRecipeVersionSheetProps) {
   const { kitchen, unitsOfMeasure } = useKitchen()
-  const uoms = unitsOfMeasure as UOM[]
+  const uoms = unitsOfMeasure as KitchenUom[]
   const queryClient = useQueryClient()
 
   const [inventoryItems, setInventoryItems] = useState<InventoryItemPick[]>([])
   const [productionRecipes, setProductionRecipes] = useState<ProductionRecipePick[]>([])
+  const [inventoryUomConversions, setInventoryUomConversions] = useState<InventoryUomConversion[]>([])
+  const [productionUomConversions, setProductionUomConversions] = useState<ProductionRecipeUomConversion[]>([])
   const [components, setComponents] = useState<ComponentRow[]>([])
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
@@ -86,10 +92,14 @@ export function AddRecipeVersionSheet({
     Promise.all([
       fetchActiveInventoryItems(kitchen.id),
       fetchActiveProductionRecipes(kitchen.id),
+      fetchInventoryUomConversions(kitchen.id),
+      fetchProductionRecipeUomConversions(kitchen.id),
     ])
-      .then(([inv, recipes]) => {
+      .then(([inv, recipes, inventoryConversions, productionConversions]) => {
         setInventoryItems(inv)
         setProductionRecipes(recipes)
+        setInventoryUomConversions(inventoryConversions)
+        setProductionUomConversions(productionConversions)
       })
       .catch(() => setError('Failed to load inventory or recipe data.'))
   }, [open, kitchen.id])
@@ -131,7 +141,7 @@ export function AddRecipeVersionSheet({
         inventory_item_id: '',
         production_recipe_id: '',
         recipe_quantity: '',
-        uom_id: uoms[0]?.id ?? '',
+        uom_id: '',
       },
     ])
   }
@@ -282,6 +292,7 @@ export function AddRecipeVersionSheet({
                               component_type: v as ComponentType,
                               inventory_item_id: '',
                               production_recipe_id: '',
+                              uom_id: '',
                             })
                           }
                         >
@@ -304,9 +315,21 @@ export function AddRecipeVersionSheet({
                             items={inventoryIds}
                             value={comp.inventory_item_id || null}
                             onValueChange={(next) =>
-                              updateRow(i, {
-                                inventory_item_id: next ?? '',
-                              })
+                              {
+                                const inventoryItem =
+                                  inventoryItems.find((item) => item.id === next) ?? null
+                                updateRow(i, {
+                                  inventory_item_id: next ?? '',
+                                  uom_id: defaultUomId(
+                                    buildInventoryUomOptions(
+                                      inventoryItem,
+                                      inventoryUomConversions,
+                                      uoms,
+                                      'recipe'
+                                    )
+                                  ),
+                                })
+                              }
                             }
                             modal
                             itemToStringLabel={(id) =>
@@ -333,9 +356,21 @@ export function AddRecipeVersionSheet({
                             items={recipeIds}
                             value={comp.production_recipe_id || null}
                             onValueChange={(next) =>
-                              updateRow(i, {
-                                production_recipe_id: next ?? '',
-                              })
+                              {
+                                const productionRecipe =
+                                  productionRecipes.find((recipe) => recipe.id === next) ?? null
+                                updateRow(i, {
+                                  production_recipe_id: next ?? '',
+                                  uom_id: defaultUomId(
+                                    buildProductionRecipeUomOptions(
+                                      productionRecipe,
+                                      productionUomConversions,
+                                      uoms,
+                                      'recipe'
+                                    )
+                                  ),
+                                })
+                              }
                             }
                             modal
                             itemToStringLabel={(id) =>
@@ -371,23 +406,42 @@ export function AddRecipeVersionSheet({
                         />
                       </td>
                       <td className="px-2 py-1.5">
+                        {(() => {
+                          const uomOptions =
+                            comp.component_type === 'inventory_item'
+                              ? buildInventoryUomOptions(
+                                  inventoryItems.find((item) => item.id === comp.inventory_item_id),
+                                  inventoryUomConversions,
+                                  uoms,
+                                  'recipe'
+                                )
+                              : buildProductionRecipeUomOptions(
+                                  productionRecipes.find((recipe) => recipe.id === comp.production_recipe_id),
+                                  productionUomConversions,
+                                  uoms,
+                                  'recipe'
+                                )
+                          return (
                         <Select
                           value={comp.uom_id}
                           onValueChange={(v) => updateRow(i, { uom_id: v })}
+                          disabled={uomOptions.length === 0}
                         >
                           <SelectTrigger className="w-full">
                             <SelectValue placeholder="UOM" />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectGroup>
-                              {uoms.map((u) => (
-                                <SelectItem key={u.id} value={u.id}>
-                                  {u.abbreviation}
+                              {uomOptions.map((u) => (
+                                <SelectItem key={u.uom_id} value={u.uom_id}>
+                                  {u.label}
                                 </SelectItem>
                               ))}
                             </SelectGroup>
                           </SelectContent>
                         </Select>
+                          )
+                        })()}
                       </td>
                       <td className="py-1.5 pl-1 pr-3">
                         <Button
