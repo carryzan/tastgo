@@ -10,7 +10,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
-import type { OpeningBalance } from '../_lib/opening-balance-actions'
+import type { OpeningBalance } from '@/lib/actions/opening-balances'
 
 interface OpeningBalanceSectionProps {
   balance?: OpeningBalance | null

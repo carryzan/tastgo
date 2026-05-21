@@ -76,24 +76,15 @@ export async function replaceComboItems(
   rows: { menu_item_id: string; quantity: number }[]
 ) {
   const supabase = await createClient()
-  const { error: delError } = await supabase
-    .from('combo_items')
-    .delete()
-    .eq('combo_id', comboId)
-    .eq('kitchen_id', kitchenId)
-  if (delError) return new Error(delError.message)
-
-  if (rows.length > 0) {
-    const { error: insError } = await supabase.from('combo_items').insert(
-      rows.map((r) => ({
-        kitchen_id: kitchenId,
-        combo_id: comboId,
-        menu_item_id: r.menu_item_id,
-        quantity: r.quantity,
-      }))
-    )
-    if (insError) return new Error(insError.message)
-  }
+  const { error } = await supabase.rpc('replace_combo_items', {
+    p_kitchen_id: kitchenId,
+    p_combo_id: comboId,
+    p_items: rows.map((row) => ({
+      menu_item_id: row.menu_item_id,
+      quantity: row.quantity,
+    })),
+  })
+  if (error) return new Error(error.message)
 
   revalidatePath(`/${kitchenId}/menu`)
 }

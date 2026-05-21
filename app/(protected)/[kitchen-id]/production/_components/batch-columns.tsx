@@ -2,7 +2,12 @@
 
 import type { ReactNode } from 'react'
 import type { ColumnDef, Row } from '@tanstack/react-table'
-import { CheckCircleIcon, LayoutListIcon, RotateCcwIcon } from 'lucide-react'
+import {
+  AlertTriangleIcon,
+  CheckCircleIcon,
+  LayoutListIcon,
+  RotateCcwIcon,
+} from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { getSelectColumn } from '@/components/data-table/data-table-select-column'
@@ -16,8 +21,10 @@ export interface Batch {
   recipe_version_id: string
   service_period_id: string | null
   target_quantity: string
+  target_storage_quantity: string
   target_uom_id: string | null
   actual_quantity: string | null
+  actual_storage_quantity: string | null
   actual_uom_id: string | null
   cost_per_unit: string | null
   total_cost: string | null
@@ -116,7 +123,26 @@ export function getBatchColumns(
       header: 'Status',
       cell: ({ row }) => {
         const cfg = STATUS_BADGE[row.original.status]
-        return <Badge variant={cfg.variant}>{cfg.label}</Badge>
+        const actualStorageQuantity = Number.parseFloat(
+          row.original.actual_storage_quantity ?? '0'
+        )
+        const totalCost = Number.parseFloat(row.original.total_cost ?? '0')
+        const isZeroCostCompleted =
+          row.original.status === 'completed' &&
+          actualStorageQuantity > 0 &&
+          totalCost === 0
+
+        return (
+          <div className="flex flex-wrap gap-1">
+            <Badge variant={cfg.variant}>{cfg.label}</Badge>
+            {isZeroCostCompleted && (
+              <Badge variant="destructive">
+                <AlertTriangleIcon />
+                Zero cost
+              </Badge>
+            )}
+          </div>
+        )
       },
       enableSorting: true,
     },

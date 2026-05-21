@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { getCurrentKitchenMemberId } from '@/lib/supabase/queries/membership'
 
 interface CreateBatchData {
   kitchen_id: string
@@ -10,12 +11,16 @@ interface CreateBatchData {
   service_period_id: string | null
   target_quantity: number
   target_uom_id: string
-  created_by: string
+  created_by?: string
 }
 
 export async function createBatch(data: CreateBatchData) {
   const supabase = await createClient()
-  const { error } = await supabase.from('production_batches').insert(data)
+  const createdBy = await getCurrentKitchenMemberId(data.kitchen_id)
+  const { error } = await supabase.from('production_batches').insert({
+    ...data,
+    created_by: createdBy,
+  })
   if (error) return new Error(error.message)
   revalidatePath('/[kitchen-id]', 'layout')
 }

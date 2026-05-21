@@ -111,6 +111,7 @@ export function CreateBatchDialog({ servicePeriods }: CreateBatchDialogProps) {
       .eq('is_active', true)
       .eq('track_stock', true)
       .not('current_version_id', 'is', null)
+      .not('storage_uom_id', 'is', null)
       .order('name'),
       fetchProductionRecipeUomConversions(kitchen.id),
     ]).then(([recipesResult, conversions]) => {
@@ -144,7 +145,7 @@ export function CreateBatchDialog({ servicePeriods }: CreateBatchDialogProps) {
     const selectedRecipe = recipes.find((r) => r.id === selectedRecipeId)
     if (!selectedRecipe?.current_version_id)
       return setError('Selected recipe has no active version.')
-    if (!targetUomId) return setError('Configure and select a production UOM.')
+    if (!targetUomId) return setError('Configure and select an output UOM.')
 
     startTransition(async () => {
       try {
@@ -236,7 +237,7 @@ export function CreateBatchDialog({ servicePeriods }: CreateBatchDialogProps) {
             </Field>
 
             <Field>
-              <FieldLabel>Production UOM</FieldLabel>
+              <FieldLabel>Output UOM</FieldLabel>
               <Select
                 value={targetUomId || undefined}
                 onValueChange={setTargetUomId}
@@ -251,7 +252,7 @@ export function CreateBatchDialog({ servicePeriods }: CreateBatchDialogProps) {
                 }
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Configure UOM first" />
+                  <SelectValue placeholder="Configure output UOM first" />
                 </SelectTrigger>
                 <SelectContent>
                   {buildProductionRecipeUomOptions(
@@ -282,7 +283,7 @@ export function CreateBatchDialog({ servicePeriods }: CreateBatchDialogProps) {
                 required
               />
               <FieldDescription>
-                How many units you plan to produce.
+                How much finished output you plan to produce.
               </FieldDescription>
             </Field>
 

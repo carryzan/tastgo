@@ -43,8 +43,8 @@ export function PurchasePaymentsSheet({
   onOpenChange,
 }: PurchasePaymentsSheetProps) {
   const { data: openBalance, isLoading: balanceLoading } = useQuery({
-    queryKey: ['purchase-open-balance', purchase.id],
-    queryFn: () => fetchPurchaseOpenBalance(purchase.id),
+    queryKey: ['purchase-open-balance', purchase.kitchen_id, purchase.id],
+    queryFn: () => fetchPurchaseOpenBalance(purchase.kitchen_id, purchase.id),
     enabled: open,
   })
 

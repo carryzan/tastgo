@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { getCurrentKitchenMemberId } from '@/lib/supabase/queries/membership'
 
 export interface ExpenseRecurrencePayload {
   category_id: string
@@ -19,6 +20,7 @@ export async function createExpenseRecurrenceSchedule(
   data: ExpenseRecurrencePayload
 ) {
   const supabase = await createClient()
+  const createdBy = await getCurrentKitchenMemberId(kitchenId)
   const { data: schedule, error } = await supabase
     .from('expense_recurrence_schedules')
     .insert({
@@ -30,7 +32,7 @@ export async function createExpenseRecurrenceSchedule(
       frequency: data.frequency,
       next_due_date: data.next_due_date,
       is_active: data.is_active ?? true,
-      created_by: data.created_by,
+      created_by: createdBy,
     })
     .select('id')
     .single()

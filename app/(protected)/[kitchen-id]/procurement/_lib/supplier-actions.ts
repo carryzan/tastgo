@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { getCurrentKitchenMemberId } from '@/lib/supabase/queries/membership'
 
 interface CreateSupplierData {
   name: string
@@ -23,7 +24,7 @@ interface CreateOpeningBalanceData {
   supplier_id: string
   outstanding_balance: number
   as_of_date: string
-  created_by: string
+  created_by?: string
 }
 
 export async function createSupplier(kitchenId: string, data: CreateSupplierData) {
@@ -72,12 +73,13 @@ export async function deleteSupplier(kitchenId: string, supplierId: string) {
 
 export async function createSupplierOpeningBalance(data: CreateOpeningBalanceData) {
   const supabase = await createClient()
+  const createdBy = await getCurrentKitchenMemberId(data.kitchen_id)
   const { error } = await supabase.from('supplier_opening_balances').insert({
     kitchen_id: data.kitchen_id,
     supplier_id: data.supplier_id,
     outstanding_balance: data.outstanding_balance,
     as_of_date: data.as_of_date,
-    created_by: data.created_by,
+    created_by: createdBy,
   })
   if (error) return new Error(error.message)
   revalidatePath(`/${data.kitchen_id}/procurement`)
@@ -88,11 +90,10 @@ export async function deleteSupplierOpeningBalance(
   balanceId: string
 ) {
   const supabase = await createClient()
-  const { error } = await supabase
-    .from('supplier_opening_balances')
-    .delete()
-    .eq('id', balanceId)
-    .eq('kitchen_id', kitchenId)
+  const { error } = await supabase.rpc('delete_supplier_opening_balance', {
+    p_kitchen_id: kitchenId,
+    p_balance_id: balanceId,
+  })
   if (error) return new Error(error.message)
   revalidatePath(`/${kitchenId}/procurement`)
 }

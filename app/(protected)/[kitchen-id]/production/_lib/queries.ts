@@ -4,7 +4,7 @@ export const RECIPES_FROM = 'production_recipes'
 // production_recipe_versions (current_version_id FK + reverse production_recipe_id FK).
 // Without the hint PostgREST errors with "more than one relationship found".
 export const RECIPES_SELECT =
-  '*, production_recipe_versions!production_recipe_id(id, version_number)'
+  '*, production_recipe_versions!production_recipe_id(id, version_number, base_output_quantity, base_output_uom_id, base_output_storage_quantity, base_output_conversion_factor)'
 
 export const BATCHES_QUERY_KEY = ['production-batches']
 export const BATCHES_FROM = 'production_batches'

@@ -28,13 +28,16 @@ export async function createRecipe(data: CreateRecipeData) {
   const supabase = await createClient()
   const { kitchen_id, name, track_stock, storage_uom_id, variance_tolerance_percentage } = data
 
-  const { error } = await supabase
+  const { data: recipe, error } = await supabase
     .from('production_recipes')
     .insert({ kitchen_id, name, track_stock, storage_uom_id, variance_tolerance_percentage })
+    .select('id')
+    .single()
 
   if (error) return new Error(error.message)
 
   revalidatePath('/[kitchen-id]', 'layout')
+  return recipe.id as string
 }
 
 export async function updateRecipe(
@@ -68,14 +71,24 @@ export async function deleteRecipe(id: string, kitchenId: string) {
 export async function createRecipeVersion(data: {
   kitchen_id: string
   production_recipe_id: string
+  base_output_quantity: number
+  base_output_uom_id: string
   components: RecipeComponent[]
 }) {
   const supabase = await createClient()
-  const { kitchen_id, production_recipe_id, components } = data
+  const {
+    kitchen_id,
+    production_recipe_id,
+    base_output_quantity,
+    base_output_uom_id,
+    components,
+  } = data
 
   const { error } = await supabase.rpc('create_production_recipe_version', {
     p_kitchen_id: kitchen_id,
     p_production_recipe_id: production_recipe_id,
+    p_base_output_quantity: base_output_quantity,
+    p_base_output_uom_id: base_output_uom_id,
     p_components: components.map((c) => ({
       inventory_item_id: c.inventory_item_id,
       recipe_quantity: c.recipe_quantity,

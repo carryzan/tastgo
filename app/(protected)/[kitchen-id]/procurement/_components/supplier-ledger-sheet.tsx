@@ -57,8 +57,8 @@ export function SupplierLedgerSheet({
   })
 
   const { data: supplierBalance } = useQuery({
-    queryKey: ['supplier-balance', supplier.id],
-    queryFn: () => fetchSupplierBalance(supplier.id),
+    queryKey: ['supplier-balance', kitchen.id, supplier.id],
+    queryFn: () => fetchSupplierBalance(kitchen.id, supplier.id),
     enabled: open,
   })
 

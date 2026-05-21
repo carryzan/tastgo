@@ -12,22 +12,33 @@ import {
   toNumber,
 } from './queries'
 
-// Refunds reduce revenue by action_amount — not subtracted in v1. Voids fully exclude the order.
-async function loadVoidedOrderIds(
+interface DashboardOrderFact {
+  id: string
+  created_at: string
+  source_id: string
+  source_name: string
+  source_type: string
+  source_settlement_mode: string
+  source_logo_url: string | null
+  payment_status: string
+  effective_net_amount: string | number | null
+  effective_net_revenue_to_kitchen: string | number | null
+}
+
+async function loadDashboardOrderFacts(
   supabase: SupabaseClient,
   kitchenId: string,
   startIso: string,
   endIso: string,
-): Promise<Set<string>> {
+): Promise<DashboardOrderFact[]> {
   const { data, error } = await supabase
-    .from('order_actions')
-    .select('order_id, created_at, type')
-    .eq('kitchen_id', kitchenId)
-    .eq('type', 'void')
-    .gte('created_at', startIso)
-    .lte('created_at', endIso)
+    .rpc('dashboard_order_facts', {
+      p_kitchen_id: kitchenId,
+      p_start: startIso,
+      p_end: endIso,
+    })
   if (error) throw new Error(error.message)
-  return new Set((data ?? []).map((r) => r.order_id as string))
+  return (data ?? []) as DashboardOrderFact[]
 }
 
 export async function fetchDashboardKpis(
@@ -35,26 +46,19 @@ export async function fetchDashboardKpis(
   kitchenId: string,
   ranges: DashboardRanges,
 ): Promise<DashboardKpis> {
-  const [ordersRes, voided] = await Promise.all([
-    supabase
-      .from('orders')
-      .select('id, net_amount, net_revenue_to_kitchen')
-      .eq('kitchen_id', kitchenId)
-      .gte('created_at', ranges.todayStart)
-      .lte('created_at', ranges.todayEnd),
-    loadVoidedOrderIds(supabase, kitchenId, ranges.todayStart, ranges.todayEnd),
-  ])
-
-  if (ordersRes.error) throw new Error(ordersRes.error.message)
-
-  const rows = (ordersRes.data ?? []).filter((r) => !voided.has(r.id as string))
-  const orderRevenue = rows.reduce((acc, r) => acc + toNumber(r.net_amount), 0)
+  const rows = await loadDashboardOrderFacts(
+    supabase,
+    kitchenId,
+    ranges.todayStart,
+    ranges.todayEnd
+  )
+  const orderRevenue = rows.reduce((acc, r) => acc + toNumber(r.effective_net_amount), 0)
   const kitchenRevenue = rows.reduce(
-    (acc, r) => acc + toNumber(r.net_revenue_to_kitchen),
+    (acc, r) => acc + toNumber(r.effective_net_revenue_to_kitchen),
     0,
   )
   const orderCount = rows.length
-  const avgOrderValue = orderCount > 0 ? kitchenRevenue / orderCount : 0
+  const avgOrderValue = orderCount > 0 ? orderRevenue / orderCount : 0
 
   const platformFee = orderRevenue - kitchenRevenue
   return { orderRevenue, kitchenRevenue, platformFee, orderCount, avgOrderValue }
@@ -65,25 +69,19 @@ export async function fetchHourlyOrders(
   kitchenId: string,
   ranges: DashboardRanges,
 ): Promise<HourlyOrdersBucket[]> {
-  const [ordersRes, voided] = await Promise.all([
-    supabase
-      .from('orders')
-      .select('id, created_at')
-      .eq('kitchen_id', kitchenId)
-      .gte('created_at', ranges.weekStart)
-      .lte('created_at', ranges.weekEnd),
-    loadVoidedOrderIds(supabase, kitchenId, ranges.weekStart, ranges.weekEnd),
-  ])
-
-  if (ordersRes.error) throw new Error(ordersRes.error.message)
+  const rows = await loadDashboardOrderFacts(
+    supabase,
+    kitchenId,
+    ranges.weekStart,
+    ranges.weekEnd
+  )
 
   const buckets: HourlyOrdersBucket[] = Array.from({ length: 24 }, (_, hour) => ({
     hour,
     count: 0,
   }))
-  for (const row of ordersRes.data ?? []) {
-    if (voided.has(row.id as string)) continue
-    const hour = new Date(row.created_at as string).getHours()
+  for (const row of rows) {
+    const hour = new Date(row.created_at).getHours()
     if (hour >= 0 && hour < 24) buckets[hour].count += 1
   }
   return buckets
@@ -94,23 +92,17 @@ export async function fetchWeeklyRevenue(
   kitchenId: string,
   ranges: DashboardRanges,
 ): Promise<DailyRevenueBucket[]> {
-  const [ordersRes, voided] = await Promise.all([
-    supabase
-      .from('orders')
-      .select('id, created_at, net_revenue_to_kitchen')
-      .eq('kitchen_id', kitchenId)
-      .gte('created_at', ranges.weekStart)
-      .lte('created_at', ranges.weekEnd),
-    loadVoidedOrderIds(supabase, kitchenId, ranges.weekStart, ranges.weekEnd),
-  ])
-
-  if (ordersRes.error) throw new Error(ordersRes.error.message)
+  const rows = await loadDashboardOrderFacts(
+    supabase,
+    kitchenId,
+    ranges.weekStart,
+    ranges.weekEnd
+  )
 
   const byDay = new Map<string, number>()
-  for (const row of ordersRes.data ?? []) {
-    if (voided.has(row.id as string)) continue
-    const key = localDateKey(row.created_at as string)
-    byDay.set(key, (byDay.get(key) ?? 0) + toNumber(row.net_revenue_to_kitchen))
+  for (const row of rows) {
+    const key = localDateKey(row.created_at)
+    byDay.set(key, (byDay.get(key) ?? 0) + toNumber(row.effective_net_revenue_to_kitchen))
   }
 
   return ranges.weekDayKeys.map((key, dayIndex) => ({
@@ -124,40 +116,24 @@ export async function fetchSourceMix(
   kitchenId: string,
   ranges: DashboardRanges,
 ): Promise<SourceMixSlice[]> {
-  const [ordersRes, voided] = await Promise.all([
-    supabase
-      .from('orders')
-      .select('id, source_id, net_amount, sources!inner(id, name, logo_url)')
-      .eq('kitchen_id', kitchenId)
-      .gte('created_at', ranges.todayStart)
-      .lte('created_at', ranges.todayEnd),
-    loadVoidedOrderIds(supabase, kitchenId, ranges.todayStart, ranges.todayEnd),
-  ])
-
-  if (ordersRes.error) throw new Error(ordersRes.error.message)
+  const rows = await loadDashboardOrderFacts(
+    supabase,
+    kitchenId,
+    ranges.todayStart,
+    ranges.todayEnd
+  )
 
   const grouped = new Map<string, SourceMixSlice>()
-  for (const row of (ordersRes.data ?? []) as Array<{
-    id: string
-    source_id: string
-    net_amount: string | number
-    sources:
-      | { id: string; name: string; logo_url: string | null }
-      | { id: string; name: string; logo_url: string | null }[]
-      | null
-  }>) {
-    if (voided.has(row.id)) continue
-    const source = Array.isArray(row.sources) ? row.sources[0] : row.sources
-    if (!source) continue
+  for (const row of rows) {
     const existing = grouped.get(row.source_id) ?? {
       sourceId: row.source_id,
-      sourceName: source.name,
-      logoUrl: source.logo_url,
+      sourceName: row.source_name,
+      logoUrl: row.source_logo_url,
       count: 0,
       revenue: 0,
     }
     existing.count += 1
-    existing.revenue += toNumber(row.net_amount)
+    existing.revenue += toNumber(row.effective_net_amount)
     grouped.set(row.source_id, existing)
   }
 
@@ -169,24 +145,18 @@ export async function fetchOfflineRevenue(
   kitchenId: string,
   ranges: DashboardRanges,
 ): Promise<DailyRevenueBucket[]> {
-  const [ordersRes, voided] = await Promise.all([
-    supabase
-      .from('orders')
-      .select('id, created_at, net_revenue_to_kitchen, sources!inner(id, type)')
-      .eq('kitchen_id', kitchenId)
-      .eq('sources.type', 'offline')
-      .gte('created_at', ranges.weekStart)
-      .lte('created_at', ranges.weekEnd),
-    loadVoidedOrderIds(supabase, kitchenId, ranges.weekStart, ranges.weekEnd),
-  ])
-
-  if (ordersRes.error) throw new Error(ordersRes.error.message)
+  const rows = await loadDashboardOrderFacts(
+    supabase,
+    kitchenId,
+    ranges.weekStart,
+    ranges.weekEnd
+  )
 
   const byDay = new Map<string, number>()
-  for (const row of ordersRes.data ?? []) {
-    if (voided.has(row.id as string)) continue
-    const key = localDateKey(row.created_at as string)
-    byDay.set(key, (byDay.get(key) ?? 0) + toNumber(row.net_revenue_to_kitchen))
+  for (const row of rows) {
+    if (row.source_type !== 'offline') continue
+    const key = localDateKey(row.created_at)
+    byDay.set(key, (byDay.get(key) ?? 0) + toNumber(row.effective_net_revenue_to_kitchen))
   }
 
   return ranges.weekDayKeys.map((key, dayIndex) => ({
@@ -200,46 +170,34 @@ export async function fetchMarketplaceReceivables(
   kitchenId: string,
   ranges: DashboardRanges,
 ): Promise<ReceivableRow[]> {
-  const [ordersRes, voided] = await Promise.all([
-    supabase
-      .from('orders')
-      .select('id, source_id, net_amount, sources!inner(id, name, type, logo_url)')
-      .eq('kitchen_id', kitchenId)
-      .eq('payment_status', 'unpaid')
-      .eq('sources.type', 'online')
-      .gte('created_at', ranges.monthStart)
-      .lte('created_at', ranges.monthEnd),
-    loadVoidedOrderIds(supabase, kitchenId, ranges.monthStart, ranges.monthEnd),
-  ])
-
-  if (ordersRes.error) throw new Error(ordersRes.error.message)
+  const rows = await loadDashboardOrderFacts(
+    supabase,
+    kitchenId,
+    ranges.monthStart,
+    ranges.monthEnd
+  )
 
   const grouped = new Map<string, ReceivableRow>()
 
-  for (const row of (ordersRes.data ?? []) as Array<{
-    id: string
-    source_id: string
-    net_amount: string | number
-    sources:
-      | { id: string; name: string; type: string; logo_url: string | null }
-      | { id: string; name: string; type: string; logo_url: string | null }[]
-      | null
-  }>) {
-    if (voided.has(row.id)) continue
-    const source = Array.isArray(row.sources) ? row.sources[0] : row.sources
-    if (!source) continue
+  for (const row of rows) {
+    if (
+      row.payment_status !== 'unpaid' ||
+      row.source_settlement_mode !== 'marketplace_receivable'
+    ) {
+      continue
+    }
 
     const existing =
       grouped.get(row.source_id) ?? {
         sourceId: row.source_id,
-        sourceName: source.name,
-        logoUrl: source.logo_url,
+        sourceName: row.source_name,
+        logoUrl: row.source_logo_url,
         unpaidCount: 0,
         unpaidTotal: 0,
       }
 
     existing.unpaidCount += 1
-    existing.unpaidTotal += toNumber(row.net_amount)
+    existing.unpaidTotal += toNumber(row.effective_net_amount)
     grouped.set(row.source_id, existing)
   }
 
@@ -282,4 +240,3 @@ export async function fetchSourceMixBrowser(
 ): Promise<SourceMixSlice[]> {
   return fetchSourceMix(createClient(), kitchenId, getLocalRanges())
 }
-

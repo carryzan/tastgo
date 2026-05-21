@@ -75,8 +75,8 @@ export function PaymentDetailSheet({
   })
 
   const { data: unallocatedAmount, isLoading: unallocatedLoading } = useQuery({
-    queryKey: ['supplier-payment-unallocated', payment.id],
-    queryFn: () => fetchSupplierPaymentUnallocatedAmount(payment.id),
+    queryKey: ['supplier-payment-unallocated', kitchen.id, payment.id],
+    queryFn: () => fetchSupplierPaymentUnallocatedAmount(kitchen.id, payment.id),
     enabled: open,
   })
 
@@ -84,7 +84,7 @@ export function PaymentDetailSheet({
     queryClient.invalidateQueries({ queryKey: PAYMENTS_QUERY_KEY })
     queryClient.invalidateQueries({ queryKey: PURCHASES_QUERY_KEY })
     queryClient.invalidateQueries({ queryKey: ['payment-allocations', payment.id] })
-    queryClient.invalidateQueries({ queryKey: ['supplier-payment-unallocated', payment.id] })
+    queryClient.invalidateQueries({ queryKey: ['supplier-payment-unallocated', kitchen.id, payment.id] })
   }
 
   function handleUnallocate() {

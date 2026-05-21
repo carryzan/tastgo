@@ -61,7 +61,7 @@ export function RecipeForm({
               />
             </div>
             <FieldDescription>
-              When enabled, batches will deduct from inventory.
+              When enabled, production batches create finished stock.
             </FieldDescription>
           </Field>
 

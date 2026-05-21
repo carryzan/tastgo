@@ -63,14 +63,14 @@ export function AllocateCreditDialog({
   })
 
   const { data: openCreditAmount, isLoading: openCreditLoading } = useQuery({
-    queryKey: ['supplier-credit-open', creditNote.id],
-    queryFn: () => fetchSupplierCreditOpenAmount(creditNote.id),
+    queryKey: ['supplier-credit-open', kitchen.id, creditNote.id],
+    queryFn: () => fetchSupplierCreditOpenAmount(kitchen.id, creditNote.id),
     enabled: open,
   })
 
   const { data: purchaseOpenBalance, isLoading: purchaseOpenLoading } = useQuery({
-    queryKey: ['purchase-open-balance', purchaseId],
-    queryFn: () => fetchPurchaseOpenBalance(purchaseId),
+    queryKey: ['purchase-open-balance', kitchen.id, purchaseId],
+    queryFn: () => fetchPurchaseOpenBalance(kitchen.id, purchaseId),
     enabled: open && !!purchaseId,
   })
 

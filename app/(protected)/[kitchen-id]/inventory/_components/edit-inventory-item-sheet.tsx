@@ -10,7 +10,7 @@ import {
   createOpeningBalance,
   deleteOpeningBalance,
   type OpeningBalance,
-} from '../_lib/opening-balance-actions'
+} from '@/lib/actions/opening-balances'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import {
@@ -23,7 +23,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { InventoryItemForm, parseFormValues } from './inventory-item-form'
-import { OpeningBalanceSection } from './opening-balance-section'
+import { OpeningBalanceSection } from '@/components/shared/opening-balance-section'
 import type { InventoryItem } from './columns'
 import { INVENTORY_QUERY_KEY } from '../_lib/queries'
 import type { InventoryCategory } from '../_lib/inventory-categories'

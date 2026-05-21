@@ -90,8 +90,12 @@ function uomById(uoms: KitchenUom[]) {
   return new Map(uoms.map((uom) => [uom.id, uom]))
 }
 
-function formatLabel(uom: KitchenUom, isStorage: boolean) {
+function formatStorageLabel(uom: KitchenUom, isStorage: boolean) {
   return isStorage ? `${uom.abbreviation} (storage)` : uom.abbreviation
+}
+
+function formatOutputLabel(uom: KitchenUom, isOutput: boolean) {
+  return isOutput ? `${uom.abbreviation} (output)` : uom.abbreviation
 }
 
 export function buildInventoryUomOptions(
@@ -108,7 +112,7 @@ export function buildInventoryUomOptions(
   if (storageUom) {
     options.set(item.storage_uom_id, {
       uom_id: item.storage_uom_id,
-      label: formatLabel(storageUom, true),
+      label: formatStorageLabel(storageUom, true),
       abbreviation: storageUom.abbreviation,
       factor_to_storage: 1,
       is_default: false,
@@ -125,7 +129,7 @@ export function buildInventoryUomOptions(
     if (!uom) continue
     options.set(conversion.uom_id, {
       uom_id: conversion.uom_id,
-      label: formatLabel(uom, conversion.uom_id === item.storage_uom_id),
+      label: formatStorageLabel(uom, conversion.uom_id === item.storage_uom_id),
       abbreviation: uom.abbreviation,
       factor_to_storage: Number(conversion.factor_to_storage),
       is_default: Boolean(conversion[defaultKey]),
@@ -154,7 +158,7 @@ export function buildProductionRecipeUomOptions(
   if (storageUom) {
     options.set(recipe.storage_uom_id, {
       uom_id: recipe.storage_uom_id,
-      label: formatLabel(storageUom, true),
+      label: formatOutputLabel(storageUom, true),
       abbreviation: storageUom.abbreviation,
       factor_to_storage: 1,
       is_default: false,
@@ -171,7 +175,7 @@ export function buildProductionRecipeUomOptions(
     if (!uom) continue
     options.set(conversion.uom_id, {
       uom_id: conversion.uom_id,
-      label: formatLabel(uom, conversion.uom_id === recipe.storage_uom_id),
+      label: formatOutputLabel(uom, conversion.uom_id === recipe.storage_uom_id),
       abbreviation: uom.abbreviation,
       factor_to_storage: Number(conversion.factor_to_storage),
       is_default: Boolean(conversion[defaultKey]),

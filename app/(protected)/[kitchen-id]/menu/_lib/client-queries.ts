@@ -82,8 +82,8 @@ export async function fetchActiveProductionRecipes(kitchenId: string) {
     .select('id, name, storage_uom_id')
     .eq('kitchen_id', kitchenId)
     .eq('is_active', true)
-    .eq('track_stock', true)
     .not('current_version_id', 'is', null)
+    .not('storage_uom_id', 'is', null)
     .order('name')
   if (error) throw new Error(error.message)
   return (data ?? []) as ProductionRecipePick[]

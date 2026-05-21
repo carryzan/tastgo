@@ -5,7 +5,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useKitchen } from '@/hooks/use-kitchen'
 import { useKitchenUpload } from '@/hooks/use-kitchen-upload'
 import { createInventoryItem } from '../_lib/item-actions'
-import { createOpeningBalance } from '../_lib/opening-balance-actions'
+import { createOpeningBalance } from '@/lib/actions/opening-balances'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import {
@@ -18,7 +18,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { InventoryItemForm, parseFormValues } from './inventory-item-form'
-import { OpeningBalanceSection } from './opening-balance-section'
+import { OpeningBalanceSection } from '@/components/shared/opening-balance-section'
 import { INVENTORY_QUERY_KEY } from '../_lib/queries'
 import type { InventoryCategory } from '../_lib/inventory-categories'
 

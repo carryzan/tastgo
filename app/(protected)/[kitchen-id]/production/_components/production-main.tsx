@@ -15,8 +15,8 @@ import { ProductionSiteHeader } from './production-site-header'
 import { RecipesMain } from './recipes-main'
 import { BatchesMain } from './batches-main'
 import { CreateBatchDialog } from './create-batch-dialog'
-import { AddRecipeDialog } from './add-recipe-dialog'
-import { EditRecipeSheet } from './edit-recipe-dialog'
+import { AddRecipeSheet } from './add-recipe-sheet'
+import { EditRecipeSheet } from './edit-recipe-sheet'
 import { VersionHistorySheet } from './version-history-sheet'
 import { AddVersionSheet } from './add-version-sheet'
 import { UomConfigSheet } from './uom-config-sheet'
@@ -225,7 +225,7 @@ export function ProductionMain({ initialServicePeriods }: ProductionMainProps) {
         </TabsContent>
       </Tabs>
 
-      <AddRecipeDialog open={addRecipeOpen} onOpenChange={setAddRecipeOpen} />
+      <AddRecipeSheet open={addRecipeOpen} onOpenChange={setAddRecipeOpen} />
       {editRecipe && (
         <EditRecipeSheet
           recipe={editRecipe}

@@ -53,8 +53,11 @@ export async function updateStockCountItem(
   })
 
   if (error) return new Error(error.message)
+  const updatedItem = data.at(0)
+  if (!updatedItem) return new Error('Stock count item was not updated.')
+
   revalidatePath('/[kitchen-id]', 'layout')
-  return data[0]
+  return updatedItem
 }
 
 export async function completeStockCount(kitchenId: string, sessionId: string) {

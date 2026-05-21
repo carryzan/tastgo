@@ -20,7 +20,14 @@ export interface Recipe {
   is_active: boolean
   created_at: string
   updated_at: string
-  production_recipe_versions: { id: string; version_number: number }[]
+  production_recipe_versions: {
+    id: string
+    version_number: number
+    base_output_quantity: string
+    base_output_uom_id: string
+    base_output_storage_quantity: string
+    base_output_conversion_factor: string
+  }[]
 }
 
 export const recipeColumnConfigs: ColumnConfig[] = [
@@ -58,12 +65,10 @@ export function getRecipeColumns(
         <PlusCircleIcon />
         New Version
       </DropdownMenuItem>
-      {row.original.track_stock && (
-        <DropdownMenuItem onClick={() => callbacks.onUomConfig(row)}>
-          <ScaleIcon />
-          UOM Conversions
-        </DropdownMenuItem>
-      )}
+      <DropdownMenuItem onClick={() => callbacks.onUomConfig(row)}>
+        <ScaleIcon />
+        UOM Conversions
+      </DropdownMenuItem>
     </>
   )
 
@@ -96,9 +101,9 @@ export function getRecipeColumns(
       header: 'Track Stock',
       cell: ({ row }) =>
         row.original.track_stock ? (
-          <Badge variant="default">Tracked</Badge>
+          <Badge variant="default">Stocked</Badge>
         ) : (
-          <Badge variant="outline">Untracked</Badge>
+          <Badge variant="outline">Sub-recipe</Badge>
         ),
       enableSorting: false,
     },

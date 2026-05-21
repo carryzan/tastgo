@@ -62,8 +62,8 @@ export function RefundCreditDialog({
   })
 
   const { data: openCreditAmount, isLoading: openCreditLoading } = useQuery({
-    queryKey: ['supplier-credit-open', creditNote.id],
-    queryFn: () => fetchSupplierCreditOpenAmount(creditNote.id),
+    queryKey: ['supplier-credit-open', kitchen.id, creditNote.id],
+    queryFn: () => fetchSupplierCreditOpenAmount(kitchen.id, creditNote.id),
     enabled: open,
   })
 

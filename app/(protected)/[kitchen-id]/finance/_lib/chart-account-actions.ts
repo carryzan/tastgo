@@ -38,7 +38,7 @@ export async function createChartAccount(
     parent_account_id: data.parent_account_id ?? null,
   })
   if (error) return new Error(error.message)
-  revalidatePath(`/${kitchenId}/cash`)
+  revalidatePath(`/${kitchenId}/finance`)
 }
 
 export async function updateChartAccount(
@@ -53,7 +53,7 @@ export async function updateChartAccount(
     .eq('id', accountId)
     .eq('kitchen_id', kitchenId)
   if (error) return new Error(error.message)
-  revalidatePath(`/${kitchenId}/cash`)
+  revalidatePath(`/${kitchenId}/finance`)
 }
 
 export async function deleteChartAccount(
@@ -67,5 +67,5 @@ export async function deleteChartAccount(
     .eq('id', accountId)
     .eq('kitchen_id', kitchenId)
   if (error) return new Error(error.message)
-  revalidatePath(`/${kitchenId}/cash`)
+  revalidatePath(`/${kitchenId}/finance`)
 }

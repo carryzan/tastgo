@@ -28,7 +28,6 @@ export async function createManualSupplierCreditNote(data: CreateManualCreditNot
   if (error) return new Error(error.message)
   revalidatePath(`/${data.kitchen_id}/procurement`)
   revalidatePath(`/${data.kitchen_id}/finance`)
-  revalidatePath(`/${data.kitchen_id}/cash`)
 }
 
 export async function allocateCredit(
@@ -76,6 +75,7 @@ export async function refundCredit(
   })
   if (error) return new Error(error.message)
   revalidatePath(`/${kitchenId}/procurement`)
+  revalidatePath(`/${kitchenId}/finance`)
 }
 
 export async function reverseCreditNote(

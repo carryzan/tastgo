@@ -12,7 +12,7 @@ export async function closeAccountingPeriod(
     p_period_id: periodId,
   })
   if (error) return new Error(error.message)
-  revalidatePath(`/${kitchenId}/cash`)
+  revalidatePath(`/${kitchenId}/finance`)
 }
 
 export async function reopenAccountingPeriod(
@@ -29,5 +29,5 @@ export async function reopenAccountingPeriod(
     p_reason: reason.trim(),
   })
   if (error) return new Error(error.message)
-  revalidatePath(`/${kitchenId}/cash`)
+  revalidatePath(`/${kitchenId}/finance`)
 }

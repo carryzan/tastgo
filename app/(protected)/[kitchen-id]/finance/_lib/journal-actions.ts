@@ -34,7 +34,7 @@ export async function createManualJournal(
     p_lines: data.lines,
   })
   if (error) return new Error(error.message)
-  revalidatePath(`/${kitchenId}/cash`)
+  revalidatePath(`/${kitchenId}/finance`)
 }
 
 export async function reverseManualJournal(
@@ -48,5 +48,5 @@ export async function reverseManualJournal(
     p_reason: data.reason,
   })
   if (error) return new Error(error.message)
-  revalidatePath(`/${kitchenId}/cash`)
+  revalidatePath(`/${kitchenId}/finance`)
 }

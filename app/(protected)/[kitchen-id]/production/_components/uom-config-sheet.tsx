@@ -280,7 +280,7 @@ export function UomConfigSheet({
 
   function handleSave() {
     setError(null)
-    if (!storageUomId) return setError('Select a storage UOM.')
+    if (!storageUomId) return setError('Select an output UOM.')
     if (rows.length === 0) return setError('Add at least one UOM.')
 
     const seen = new Set<string>()
@@ -290,7 +290,7 @@ export function UomConfigSheet({
       seen.add(row.uom_id)
       if (row.factor_to_storage <= 0) return setError('Conversion factors must be greater than 0.')
       if (row.uom_id === storageUomId && row.factor_to_storage !== 1) {
-        return setError('Storage UOM conversion factor must be 1.')
+        return setError('Output UOM conversion factor must be 1.')
       }
     }
 
@@ -319,7 +319,7 @@ export function UomConfigSheet({
         }}
       >
         <SheetHeader>
-          <SheetTitle>Production UOM</SheetTitle>
+          <SheetTitle>Production Output UOM</SheetTitle>
           <SheetDescription>{recipe.name}</SheetDescription>
         </SheetHeader>
 
@@ -327,14 +327,14 @@ export function UomConfigSheet({
           <div className="grid flex-1 auto-rows-min gap-6 px-4">
             <FieldGroup>
               <Field>
-                <FieldLabel>Storage UOM</FieldLabel>
+                <FieldLabel>Output UOM</FieldLabel>
                 <Select
                   value={storageUomId || undefined}
                   onValueChange={handleStorageChange}
                   disabled={disabled}
                 >
                   <SelectTrigger className="w-64 max-w-full">
-                    <SelectValue placeholder="Select storage UOM" />
+                    <SelectValue placeholder="Select output UOM" />
                   </SelectTrigger>
                   <SelectContent>
                     {uoms.map((uom) => (
@@ -376,7 +376,7 @@ export function UomConfigSheet({
                       UOM
                     </th>
                     <th className="px-2 py-2 text-left font-medium text-muted-foreground">
-                      Factor to storage
+                      Factor to output
                     </th>
                     <th className="px-2 py-2 text-left font-medium text-muted-foreground">
                       Status

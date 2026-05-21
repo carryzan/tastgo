@@ -31,7 +31,7 @@ export async function createSupplierPayment(data: CreatePaymentData) {
   if (error) return new Error(error.message)
 
   revalidatePath(`/${data.kitchen_id}/procurement`)
-  revalidatePath(`/${data.kitchen_id}/cash`)
+  revalidatePath(`/${data.kitchen_id}/finance`)
 }
 
 export async function allocatePayment(

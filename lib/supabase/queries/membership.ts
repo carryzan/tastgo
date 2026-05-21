@@ -29,6 +29,25 @@ export async function getMembership(kitchenId: string) {
     .single()
 }
 
+export async function getCurrentKitchenMemberId(kitchenId: string): Promise<string> {
+  const supabase = await createClient()
+  const userId = await getUserId()
+
+  const { data, error } = await supabase
+    .from('kitchen_members')
+    .select('id')
+    .eq('kitchen_id', kitchenId)
+    .eq('profile_id', userId)
+    .eq('is_active', true)
+    .single()
+
+  if (error || typeof data?.id !== 'string') {
+    throw new Error('No active kitchen member found for the authenticated user.')
+  }
+
+  return data.id
+}
+
 export async function getMemberPermissions(kitchenId: string) {
   const supabase = await createClient()
 

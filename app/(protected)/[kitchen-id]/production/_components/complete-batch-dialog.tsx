@@ -92,7 +92,7 @@ export function CompleteBatchDialog({
 
     if (isNaN(actualQuantity) || actualQuantity < 0)
       return setError('Actual quantity must be 0 or greater.')
-    if (!selectedActualUomId) return setError('Configure and select a production UOM.')
+    if (!selectedActualUomId) return setError('Configure and select an output UOM.')
 
     startTransition(async () => {
       try {
@@ -151,14 +151,14 @@ export function CompleteBatchDialog({
               </FieldDescription>
             </Field>
             <Field>
-              <FieldLabel>Production UOM</FieldLabel>
+              <FieldLabel>Output UOM</FieldLabel>
               <Select
                 value={selectedActualUomId || undefined}
                 onValueChange={setActualUomId}
                 disabled={pending || uomOptions.length === 0}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Configure UOM first" />
+                  <SelectValue placeholder="Configure output UOM first" />
                 </SelectTrigger>
                 <SelectContent>
                   {uomOptions.map((option) => (

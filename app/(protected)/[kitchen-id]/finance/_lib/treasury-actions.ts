@@ -25,5 +25,5 @@ export async function transferCashBetweenAccounts(
     p_transfer_date: data.transferDate,
   })
   if (error) return new Error(error.message)
-  revalidatePath(`/${kitchenId}/cash`)
+  revalidatePath(`/${kitchenId}/finance`)
 }

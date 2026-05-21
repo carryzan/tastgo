@@ -2,7 +2,9 @@
 
 import { useState, useCallback } from 'react'
 import { HistoryIcon } from 'lucide-react'
+import { useKitchen } from '@/hooks/use-kitchen'
 import { createClient } from '@/lib/supabase/client'
+import type { KitchenUom } from '@/lib/uom-conversions'
 import type { Recipe } from './recipe-columns'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -31,6 +33,12 @@ function firstRelation<T>(rel: T | T[] | null | undefined): T | null {
   return Array.isArray(rel) ? (rel[0] ?? null) : rel
 }
 
+function formatQuantity(value: string): string {
+  const parsed = Number.parseFloat(value)
+  if (!Number.isFinite(parsed)) return value
+  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 4 }).format(parsed)
+}
+
 interface VersionHistorySheetProps {
   recipe: Recipe
   open: boolean
@@ -42,6 +50,8 @@ export function VersionHistorySheet({
   open,
   onOpenChange,
 }: VersionHistorySheetProps) {
+  const { unitsOfMeasure } = useKitchen()
+  const uoms = unitsOfMeasure as KitchenUom[]
   const [openValues, setOpenValues] = useState<string[]>([])
   const [componentsByVersion, setComponentsByVersion] = useState<
     Record<string, RecipeComponent[] | 'loading'>
@@ -117,11 +127,18 @@ export function VersionHistorySheet({
             >
               {versions.map((v) => {
                 const comps = componentsByVersion[v.id]
+                const baseOutputUom = uoms.find((uom) => uom.id === v.base_output_uom_id)
 
                 return (
                   <AccordionItem key={v.id} value={v.id}>
                     <AccordionTrigger>
-                      Version {v.version_number}
+                      <div className="flex min-w-0 flex-col items-start gap-0.5 text-left">
+                        <span>Version {v.version_number}</span>
+                        <span className="text-xs font-normal text-muted-foreground">
+                          Base output {formatQuantity(v.base_output_quantity)}{' '}
+                          {baseOutputUom?.abbreviation ?? 'UOM'}
+                        </span>
+                      </div>
                     </AccordionTrigger>
                     <AccordionContent className="h-auto pt-1">
                       {comps === undefined || comps === 'loading' ? (

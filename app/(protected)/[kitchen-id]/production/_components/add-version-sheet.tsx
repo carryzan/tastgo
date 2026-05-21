@@ -6,11 +6,14 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useKitchen } from '@/hooks/use-kitchen'
 import { createClient } from '@/lib/supabase/client'
 import {
+  buildProductionRecipeUomOptions,
   buildInventoryUomOptions,
   defaultUomId,
   fetchInventoryUomConversions,
+  fetchProductionRecipeUomConversions,
   type InventoryUomConversion,
   type KitchenUom,
+  type ProductionRecipeUomConversion,
 } from '@/lib/uom-conversions'
 import { createRecipeVersion } from '../_lib/recipe-actions'
 import { RECIPES_QUERY_KEY } from '../_lib/queries'
@@ -74,6 +77,11 @@ export function AddVersionSheet({
 
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([])
   const [uomConversions, setUomConversions] = useState<InventoryUomConversion[]>([])
+  const [productionUomConversions, setProductionUomConversions] = useState<
+    ProductionRecipeUomConversion[]
+  >([])
+  const [baseOutputQuantity, setBaseOutputQuantity] = useState('')
+  const [baseOutputUomId, setBaseOutputUomId] = useState('')
   const [components, setComponents] = useState<ComponentRow[]>([])
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
@@ -89,11 +97,23 @@ export function AddVersionSheet({
       .eq('is_active', true)
       .order('name'),
       fetchInventoryUomConversions(kitchen.id),
-    ]).then(([itemsResult, conversions]) => {
+      fetchProductionRecipeUomConversions(kitchen.id),
+    ]).then(([itemsResult, conversions, productionConversions]) => {
       setInventoryItems((itemsResult.data ?? []) as InventoryItem[])
       setUomConversions(conversions)
+      setProductionUomConversions(productionConversions)
+      setBaseOutputUomId(
+        defaultUomId(
+          buildProductionRecipeUomOptions(
+            recipe,
+            productionConversions,
+            uoms,
+            'recipe'
+          )
+        )
+      )
     })
-  }, [open, kitchen.id])
+  }, [open, kitchen.id, recipe, uoms])
 
   const inventoryItemIds = useMemo(
     () => inventoryItems.map((item) => item.id),
@@ -114,6 +134,8 @@ export function AddVersionSheet({
     if (!next) {
       setError(null)
       setComponents([])
+      setBaseOutputQuantity('')
+      setBaseOutputUomId('')
     }
   }
 
@@ -141,6 +163,17 @@ export function AddVersionSheet({
       (c) => c.inventory_item_id && c.recipe_quantity && c.uom_id
     )
 
+    const parsedBaseOutputQuantity = Number.parseFloat(baseOutputQuantity)
+    if (Number.isNaN(parsedBaseOutputQuantity) || parsedBaseOutputQuantity <= 0) {
+      return setError('Base output quantity must be greater than 0.')
+    }
+    if (!baseOutputUomId) {
+      return setError('Configure and select an output UOM before creating a version.')
+    }
+    if (builtComponents.length === 0) {
+      return setError('Add at least one ingredient before saving the version.')
+    }
+
     for (const c of builtComponents) {
       if (parseFloat(c.recipe_quantity) <= 0) {
         return setError('All component quantities must be greater than 0.')
@@ -152,6 +185,8 @@ export function AddVersionSheet({
         const result = await createRecipeVersion({
           kitchen_id: kitchen.id,
           production_recipe_id: recipe.id,
+          base_output_quantity: parsedBaseOutputQuantity,
+          base_output_uom_id: baseOutputUomId,
           components: builtComponents.map((c) => ({
             inventory_item_id: c.inventory_item_id,
             recipe_quantity: parseFloat(c.recipe_quantity),
@@ -162,6 +197,8 @@ export function AddVersionSheet({
         if (result instanceof Error) return setError(result.message)
 
         setComponents([])
+        setBaseOutputQuantity('')
+        setBaseOutputUomId('')
         onOpenChange(false)
         queryClient.invalidateQueries({ queryKey: RECIPES_QUERY_KEY })
       } catch {
@@ -174,6 +211,12 @@ export function AddVersionSheet({
     recipe.production_recipe_versions.length > 0
       ? Math.max(...recipe.production_recipe_versions.map((v) => v.version_number)) + 1
       : 1
+  const baseOutputUomOptions = buildProductionRecipeUomOptions(
+    recipe,
+    productionUomConversions,
+    uoms,
+    'recipe'
+  )
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
@@ -195,6 +238,43 @@ export function AddVersionSheet({
         </SheetHeader>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="grid gap-3 border-b px-4 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(15rem,18rem)]">
+            <div>
+              <h3 className="text-sm font-medium">Base Output</h3>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Finished output represented by these ingredient quantities.
+              </p>
+            </div>
+            <div className="grid grid-cols-[minmax(0,1fr)_minmax(5.5rem,7rem)] gap-2">
+              <Input
+                type="text"
+                inputMode="decimal"
+                placeholder="1.00"
+                value={baseOutputQuantity}
+                onChange={(e) => setBaseOutputQuantity(e.target.value)}
+                disabled={pending}
+              />
+              <Select
+                value={baseOutputUomId || undefined}
+                onValueChange={setBaseOutputUomId}
+                disabled={pending || baseOutputUomOptions.length === 0}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="UOM" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {baseOutputUomOptions.map((u) => (
+                      <SelectItem key={u.uom_id} value={u.uom_id}>
+                        {u.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
           <div className="flex items-center justify-between px-4 py-3">
             <h3 className="text-sm font-medium">Ingredients</h3>
             <Button

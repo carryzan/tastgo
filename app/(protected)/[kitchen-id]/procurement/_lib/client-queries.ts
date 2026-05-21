@@ -397,23 +397,39 @@ export async function fetchSupplierLedger(
   return (data ?? []) as unknown as SupplierLedgerEntry[]
 }
 
-export async function fetchSupplierBalance(supplierId: string): Promise<number> {
+export async function fetchSupplierBalance(
+  kitchenId: string,
+  supplierId: string
+): Promise<number> {
   const supabase = createClient()
-  const { data, error } = await supabase.rpc('current_supplier_balance', { p_supplier_id: supplierId })
+  const { data, error } = await supabase.rpc('current_supplier_balance', {
+    p_kitchen_id: kitchenId,
+    p_supplier_id: supplierId,
+  })
   if (error) throw new Error(error.message)
   return (data as number) ?? 0
 }
 
-export async function fetchPurchaseOpenBalance(purchaseId: string): Promise<number> {
+export async function fetchPurchaseOpenBalance(
+  kitchenId: string,
+  purchaseId: string
+): Promise<number> {
   const supabase = createClient()
-  const { data, error } = await supabase.rpc('current_purchase_open_balance', { p_purchase_id: purchaseId })
+  const { data, error } = await supabase.rpc('current_purchase_open_balance', {
+    p_kitchen_id: kitchenId,
+    p_purchase_id: purchaseId,
+  })
   if (error) throw new Error(error.message)
   return (data as number) ?? 0
 }
 
-export async function fetchSupplierCreditOpenAmount(creditNoteId: string): Promise<number> {
+export async function fetchSupplierCreditOpenAmount(
+  kitchenId: string,
+  creditNoteId: string
+): Promise<number> {
   const supabase = createClient()
   const { data, error } = await supabase.rpc('current_supplier_credit_open_amount', {
+    p_kitchen_id: kitchenId,
     p_credit_note_id: creditNoteId,
   })
   if (error) throw new Error(error.message)
@@ -421,10 +437,12 @@ export async function fetchSupplierCreditOpenAmount(creditNoteId: string): Promi
 }
 
 export async function fetchSupplierPaymentUnallocatedAmount(
+  kitchenId: string,
   paymentId: string
 ): Promise<number> {
   const supabase = createClient()
   const { data, error } = await supabase.rpc('current_supplier_payment_unallocated_amount', {
+    p_kitchen_id: kitchenId,
     p_payment_id: paymentId,
   })
   if (error) throw new Error(error.message)

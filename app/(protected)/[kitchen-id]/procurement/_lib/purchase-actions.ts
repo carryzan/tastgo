@@ -77,28 +77,17 @@ export async function replacePurchaseItems(
   items: PurchaseLineItem[]
 ) {
   const supabase = await createClient()
-
-  const { error: delError } = await supabase
-    .from('purchase_items')
-    .delete()
-    .eq('purchase_id', purchaseId)
-    .eq('kitchen_id', kitchenId)
-  if (delError) return new Error(delError.message)
-
-  if (items.length > 0) {
-    const { error: insError } = await supabase.from('purchase_items').insert(
-      items.map((item) => ({
-        kitchen_id: kitchenId,
-        purchase_id: purchaseId,
-        inventory_item_id: item.inventory_item_id,
-        ordered_quantity: item.ordered_quantity,
-        uom_id: item.uom_id ?? null,
-        unit_cost: item.unit_cost,
-        line_total: 0,
-      }))
-    )
-    if (insError) return new Error(insError.message)
-  }
+  const { error } = await supabase.rpc('replace_purchase_items', {
+    p_kitchen_id: kitchenId,
+    p_purchase_id: purchaseId,
+    p_items: items.map((item) => ({
+      inventory_item_id: item.inventory_item_id,
+      ordered_quantity: item.ordered_quantity,
+      uom_id: item.uom_id ?? null,
+      unit_cost: item.unit_cost,
+    })),
+  })
+  if (error) return new Error(error.message)
 
   revalidatePath(`/${kitchenId}/procurement`)
 }

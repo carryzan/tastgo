@@ -66,8 +66,8 @@ export function AllocatePaymentDialog({
     data: unallocatedAmount,
     isLoading: unallocatedLoading,
   } = useQuery({
-    queryKey: ['supplier-payment-unallocated', payment.id],
-    queryFn: () => fetchSupplierPaymentUnallocatedAmount(payment.id),
+    queryKey: ['supplier-payment-unallocated', kitchen.id, payment.id],
+    queryFn: () => fetchSupplierPaymentUnallocatedAmount(kitchen.id, payment.id),
     enabled: open,
   })
 
@@ -75,8 +75,8 @@ export function AllocatePaymentDialog({
     data: purchaseOpenBalance,
     isLoading: purchaseOpenLoading,
   } = useQuery({
-    queryKey: ['purchase-open-balance', purchaseId],
-    queryFn: () => fetchPurchaseOpenBalance(purchaseId),
+    queryKey: ['purchase-open-balance', kitchen.id, purchaseId],
+    queryFn: () => fetchPurchaseOpenBalance(kitchen.id, purchaseId),
     enabled: open && !!purchaseId,
   })
 

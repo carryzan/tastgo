@@ -112,8 +112,8 @@ export function CreditNoteDetailSheet({
   })
 
   const { data: openCreditAmount, isLoading: openCreditLoading } = useQuery({
-    queryKey: ['supplier-credit-open', creditNote.id],
-    queryFn: () => fetchSupplierCreditOpenAmount(creditNote.id),
+    queryKey: ['supplier-credit-open', creditNote.kitchen_id, creditNote.id],
+    queryFn: () => fetchSupplierCreditOpenAmount(creditNote.kitchen_id, creditNote.id),
     enabled: open,
   })
 
@@ -122,7 +122,7 @@ export function CreditNoteDetailSheet({
     queryClient.invalidateQueries({ queryKey: PURCHASES_QUERY_KEY })
     queryClient.invalidateQueries({ queryKey: ['credit-note-allocations', creditNote.id] })
     queryClient.invalidateQueries({ queryKey: ['credit-note-refunds', creditNote.id] })
-    queryClient.invalidateQueries({ queryKey: ['supplier-credit-open', creditNote.id] })
+    queryClient.invalidateQueries({ queryKey: ['supplier-credit-open', creditNote.kitchen_id, creditNote.id] })
   }
 
   function handleUnallocate() {

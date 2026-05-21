@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { getCurrentKitchenMemberId } from '@/lib/supabase/queries/membership'
 
 export interface WorkShiftPayload {
   name: string
@@ -16,6 +17,7 @@ export async function createWorkShift(
   data: WorkShiftPayload
 ) {
   const supabase = await createClient()
+  const createdBy = await getCurrentKitchenMemberId(kitchenId)
   const { data: shift, error } = await supabase
     .from('work_shifts')
     .insert({
@@ -24,7 +26,7 @@ export async function createWorkShift(
       shift_date: data.shift_date,
       start_time: data.start_time,
       end_time: data.end_time,
-      created_by: data.created_by,
+      created_by: createdBy,
     })
     .select('id')
     .single()
