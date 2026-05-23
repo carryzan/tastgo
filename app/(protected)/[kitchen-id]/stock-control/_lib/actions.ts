@@ -71,6 +71,22 @@ export async function completeStockCount(kitchenId: string, sessionId: string) {
   revalidatePath('/[kitchen-id]', 'layout')
 }
 
+export async function cancelStockCount(
+  kitchenId: string,
+  sessionId: string,
+  reason: string
+) {
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('cancel_stock_count', {
+    p_kitchen_id: kitchenId,
+    p_session_id: sessionId,
+    p_reason: reason,
+  })
+
+  if (error) return new Error(error.message)
+  revalidatePath('/[kitchen-id]', 'layout')
+}
+
 export async function recordWasteLog(data: WasteLogData) {
   const supabase = await createClient()
   const { error } = await supabase.rpc('record_waste_log', {

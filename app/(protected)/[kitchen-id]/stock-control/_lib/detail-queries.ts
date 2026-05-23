@@ -10,13 +10,17 @@ export interface StockCountSessionDetail {
   id: string
   kitchen_id: string
   type: 'full' | 'spot'
-  status: 'in_progress' | 'completed'
+  status: 'in_progress' | 'completed' | 'cancelled'
   created_by: string
   completed_by: string | null
+  cancelled_by: string | null
   created_at: string
   completed_at: string | null
+  cancelled_at: string | null
+  cancel_reason: string | null
   created_member: MemberDisplay | null
   completed_member: MemberDisplay | null
+  cancelled_member: MemberDisplay | null
 }
 
 export interface StockCountDetailItem {
@@ -78,7 +82,7 @@ export async function getStockCountDetail(
     supabase
       .from('stock_count_sessions')
       .select(
-        '*, created_member:kitchen_members!created_by(id, profiles(full_name)), completed_member:kitchen_members!completed_by(id, profiles(full_name))'
+        '*, created_member:kitchen_members!created_by(id, profiles(full_name)), completed_member:kitchen_members!completed_by(id, profiles(full_name)), cancelled_member:kitchen_members!cancelled_by(id, profiles(full_name))'
       )
       .eq('kitchen_id', kitchenId)
       .eq('id', sessionId)

@@ -30,7 +30,7 @@ import {
   type WasteLedgerEntry,
 } from './waste-columns'
 import { NewCountDialog } from './new-count-dialog'
-import { RecordWasteSheet } from './record-waste-sheet'
+import { RecordWasteDialog } from './record-waste-dialog'
 import { ReverseWasteDialog } from './reverse-waste-dialog'
 import { StockControlSiteHeader } from './stock-control-site-header'
 
@@ -152,7 +152,7 @@ export function StockControlMain() {
         </TabsContent>
       </Tabs>
 
-      <RecordWasteSheet open={wasteOpen} onOpenChange={setWasteOpen} />
+      <RecordWasteDialog open={wasteOpen} onOpenChange={setWasteOpen} />
       {reverseWasteTarget ? (
         <ReverseWasteDialog
           kitchenId={kitchen.id}

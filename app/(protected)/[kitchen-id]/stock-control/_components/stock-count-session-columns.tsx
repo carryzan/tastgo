@@ -18,13 +18,17 @@ export interface StockCountSession {
   id: string
   kitchen_id: string
   type: 'full' | 'spot'
-  status: 'in_progress' | 'completed'
+  status: 'in_progress' | 'completed' | 'cancelled'
   created_by: string
   completed_by: string | null
+  cancelled_by: string | null
   created_at: string
   completed_at: string | null
+  cancelled_at: string | null
+  cancel_reason: string | null
   created_member: MemberDisplay | null
   completed_member: MemberDisplay | null
+  cancelled_member: MemberDisplay | null
 }
 
 const STATUS_BADGE: Record<
@@ -33,10 +37,11 @@ const STATUS_BADGE: Record<
 > = {
   in_progress: { label: 'In Progress', variant: 'secondary' },
   completed: { label: 'Completed', variant: 'default' },
+  cancelled: { label: 'Cancelled', variant: 'outline' },
 }
 
 export const stockCountSessionColumnConfigs: ColumnConfig[] = [
-  { column: 'status', label: 'Status', type: 'select', options: ['in_progress', 'completed'], sortable: true },
+  { column: 'status', label: 'Status', type: 'select', options: ['in_progress', 'completed', 'cancelled'], sortable: true },
   { column: 'type', label: 'Type', type: 'select', options: ['full', 'spot'], sortable: true },
   { column: 'created_at', label: 'Created', type: 'date', sortable: true },
   { column: 'completed_at', label: 'Completed', type: 'date', sortable: true },

@@ -25,6 +25,14 @@ import {
 import { INVENTORY_QUERY_KEY } from '../../inventory/_lib/queries'
 import { Button } from '@/components/ui/button'
 import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from '@/components/ui/combobox'
+import {
   Dialog,
   DialogClose,
   DialogContent,
@@ -35,19 +43,19 @@ import {
 } from '@/components/ui/dialog'
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
 
-interface RecordWasteSheetProps {
+interface RecordWasteDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
 }
 
-export function RecordWasteSheet({
+export function RecordWasteDialog({
   open,
   onOpenChange,
-}: RecordWasteSheetProps) {
+}: RecordWasteDialogProps) {
   const { kitchen, unitsOfMeasure } = useKitchen()
   const uoms = unitsOfMeasure as KitchenUom[]
   const queryClient = useQueryClient()
@@ -77,6 +85,17 @@ export function RecordWasteSheet({
   const availableRows = useMemo(
     () => stockRows.filter((row) => Number(row.current_quantity) > 0),
     [stockRows]
+  )
+  const itemIds = useMemo(() => availableRows.map((row) => row.id), [availableRows])
+  const itemLabelById = useMemo(
+    () =>
+      new Map(
+        availableRows.map((row) => [
+          row.id,
+          `${row.name} (${row.count_uom_label ?? 'no UOM'})`,
+        ])
+      ),
+    [availableRows]
   )
 
   const selectedItem = availableRows.find((row) => row.id === itemId) ?? null
@@ -110,6 +129,44 @@ export function RecordWasteSheet({
       setUomId('')
       setError(null)
     }
+  }
+
+  function handleItemChange(value: string | null) {
+    if (!value) {
+      setItemId('')
+      setUomId('')
+      return
+    }
+
+    const nextItem = availableRows.find((row) => row.id === value) ?? null
+    if (!nextItem) {
+      setItemId('')
+      setUomId('')
+      return
+    }
+
+    const options =
+      nextItem.item_type === 'inventory_item'
+        ? buildInventoryUomOptions(
+            {
+              id: nextItem.inventory_item_id ?? '',
+              storage_uom_id: nextItem.storage_uom_id,
+            },
+            inventoryUomConversions,
+            uoms,
+            'waste'
+          )
+        : buildProductionRecipeUomOptions(
+            {
+              id: nextItem.production_recipe_id ?? '',
+              storage_uom_id: nextItem.storage_uom_id,
+            },
+            productionUomConversions,
+            uoms,
+            'waste'
+          )
+    setItemId(value)
+    setUomId(defaultUomId(options))
   }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -173,49 +230,33 @@ export function RecordWasteSheet({
         <form onSubmit={handleSubmit}>
           <FieldGroup>
             <Field>
-              <FieldLabel>Item</FieldLabel>
-              <Select
-                value={itemId}
-                onValueChange={(value) => {
-                  const nextItem = availableRows.find((row) => row.id === value) ?? null
-                  const options =
-                    nextItem?.item_type === 'inventory_item'
-                      ? buildInventoryUomOptions(
-                          {
-                            id: nextItem.inventory_item_id ?? '',
-                            storage_uom_id: nextItem.storage_uom_id,
-                          },
-                          inventoryUomConversions,
-                          uoms,
-                          'waste'
-                        )
-                      : buildProductionRecipeUomOptions(
-                          {
-                            id: nextItem?.production_recipe_id ?? '',
-                            storage_uom_id: nextItem?.storage_uom_id ?? null,
-                          },
-                          productionUomConversions,
-                          uoms,
-                          'waste'
-                        )
-                  setItemId(value)
-                  setUomId(defaultUomId(options))
-                }}
-                disabled={pending}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select item" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    {availableRows.map((row) => (
-                      <SelectItem key={row.id} value={row.id}>
-                        {row.name} ({row.count_uom_label ?? 'no UOM'})
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
+              <FieldLabel htmlFor="waste-item">Item</FieldLabel>
+              <div className="relative z-100">
+                <Combobox
+                  items={itemIds}
+                  value={itemId || null}
+                  onValueChange={handleItemChange}
+                  disabled={pending}
+                  modal={true}
+                  itemToStringLabel={(id) => itemLabelById.get(String(id)) ?? ''}
+                >
+                  <ComboboxInput
+                    id="waste-item"
+                    placeholder="Select item"
+                    className="w-full"
+                  />
+                  <ComboboxContent className="z-100 pointer-events-auto">
+                    <ComboboxEmpty>No stock items found.</ComboboxEmpty>
+                    <ComboboxList>
+                      {(id: string) => (
+                        <ComboboxItem key={id} value={id}>
+                          {itemLabelById.get(id) ?? id}
+                        </ComboboxItem>
+                      )}
+                    </ComboboxList>
+                  </ComboboxContent>
+                </Combobox>
+              </div>
             </Field>
 
             <Field>
@@ -241,7 +282,7 @@ export function RecordWasteSheet({
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Configure UOM first" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-100">
                   {selectedUomOptions.map((option) => (
                     <SelectItem key={option.uom_id} value={option.uom_id}>
                       {option.label}

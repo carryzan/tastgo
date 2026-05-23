@@ -24,6 +24,14 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { FieldError } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import {
@@ -34,6 +42,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Table,
   TableBody,
@@ -43,6 +52,7 @@ import {
   TableRow,
 } from '@/components/data-table/data-table-primitives'
 import {
+  cancelStockCount,
   completeStockCount,
   updateStockCountItem,
 } from '../_lib/actions'
@@ -113,6 +123,16 @@ function memberName(
   return member?.profiles?.full_name ?? '-'
 }
 
+function statusConfig(status: StockCountSessionDetail['status']) {
+  if (status === 'completed') {
+    return { label: 'Completed', variant: 'default' as const }
+  }
+  if (status === 'cancelled') {
+    return { label: 'Cancelled', variant: 'outline' as const }
+  }
+  return { label: 'In Progress', variant: 'secondary' as const }
+}
+
 function toEditable(item: StockCountDetailItem): EditableStockCountItem {
   return {
     ...item,
@@ -139,6 +159,10 @@ export function StockCountDetail({
   const [savingId, setSavingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [completePending, startCompleteTransition] = useTransition()
+  const [cancelOpen, setCancelOpen] = useState(false)
+  const [cancelReason, setCancelReason] = useState('')
+  const [cancelError, setCancelError] = useState<string | null>(null)
+  const [cancelPending, startCancelTransition] = useTransition()
   const { data: inventoryUomConversions = [] } = useQuery<InventoryUomConversion[]>({
     queryKey: ['inventory-uom-conversions', kitchenId],
     queryFn: () => fetchInventoryUomConversions(kitchenId),
@@ -148,8 +172,10 @@ export function StockCountDetail({
     queryFn: () => fetchProductionRecipeUomConversions(kitchenId),
   })
 
-  const isReadOnly =
-    session.status === 'completed' || !permissions.has('stock_count.update')
+  const canUpdate = permissions.has('stock_count.update')
+  const isInProgress = session.status === 'in_progress'
+  const isReadOnly = !isInProgress || !canUpdate
+  const currentStatus = statusConfig(session.status)
   const groupedItems = useMemo(() => {
     const groups = new Map<string, EditableStockCountItem[]>()
     for (const item of items) {
@@ -274,6 +300,41 @@ export function StockCountDetail({
     })
   }
 
+  function handleCancelOpenChange(next: boolean) {
+    if (cancelPending) return
+    setCancelOpen(next)
+    if (!next) {
+      setCancelReason('')
+      setCancelError(null)
+    }
+  }
+
+  function handleCancelSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setCancelError(null)
+
+    const reason = cancelReason.trim()
+    if (!reason) {
+      setCancelError('Enter a cancellation reason.')
+      return
+    }
+
+    startCancelTransition(async () => {
+      try {
+        const result = await cancelStockCount(kitchenId, session.id, reason)
+        if (result instanceof Error) {
+          setCancelError(result.message)
+          return
+        }
+        setCancelOpen(false)
+        setCancelReason('')
+        router.refresh()
+      } catch {
+        setCancelError('Something went wrong. Please try again.')
+      }
+    })
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <SiteHeader title="Stock Count">
@@ -281,25 +342,32 @@ export function StockCountDetail({
           <Button variant="outline" size="sm" asChild>
             <Link href={`/${kitchenId}/stock-control`}>Back</Link>
           </Button>
-          {!isReadOnly && (
-            <Button
-              size="sm"
-              onClick={handleComplete}
-              disabled={!allCounted || completePending}
-              className="min-w-28"
-            >
-              {completePending && <Spinner data-icon="inline-start" />}
-              Complete
-            </Button>
+          {isInProgress && canUpdate && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleCancelOpenChange(true)}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleComplete}
+                disabled={!allCounted || completePending}
+                className="min-w-28"
+              >
+                {completePending && <Spinner data-icon="inline-start" />}
+                Complete
+              </Button>
+            </>
           )}
         </div>
       </SiteHeader>
 
       <div className="border-b px-4 py-3">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={session.status === 'completed' ? 'default' : 'secondary'}>
-            {session.status === 'completed' ? 'Completed' : 'In Progress'}
-          </Badge>
+          <Badge variant={currentStatus.variant}>{currentStatus.label}</Badge>
           <Badge variant="outline">
             {session.type === 'full' ? 'Full' : 'Spot'}
           </Badge>
@@ -313,10 +381,21 @@ export function StockCountDetail({
               {memberName(session.completed_member)}
             </span>
           )}
+          {session.cancelled_at && (
+            <span className="text-sm text-muted-foreground">
+              Cancelled {formatDate(session.cancelled_at)} by{' '}
+              {memberName(session.cancelled_member)}
+            </span>
+          )}
           <span className="ml-auto text-sm text-muted-foreground">
             {countedCount}/{items.length} counted
           </span>
         </div>
+        {session.cancel_reason && (
+          <p className="mt-2 text-sm text-muted-foreground">
+            {session.cancel_reason}
+          </p>
+        )}
         {error && <FieldError className="mt-2">{error}</FieldError>}
       </div>
 
@@ -517,6 +596,54 @@ export function StockCountDetail({
           })}
         </div>
       </div>
+      <Dialog open={cancelOpen} onOpenChange={handleCancelOpenChange}>
+        <DialogContent
+          onInteractOutside={(e) => {
+            if (cancelPending) e.preventDefault()
+          }}
+          onEscapeKeyDown={(e) => {
+            if (cancelPending) e.preventDefault()
+          }}
+        >
+          <form onSubmit={handleCancelSubmit} className="grid gap-4">
+            <DialogHeader>
+              <DialogTitle>Cancel Stock Count</DialogTitle>
+              <DialogDescription>
+                Cancel this in-progress count without posting inventory or
+                accounting changes.
+              </DialogDescription>
+            </DialogHeader>
+            <Textarea
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              placeholder="Reason for cancelling this count"
+              rows={4}
+              disabled={cancelPending}
+              required
+            />
+            {cancelError && <FieldError>{cancelError}</FieldError>}
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => handleCancelOpenChange(false)}
+                disabled={cancelPending}
+              >
+                Keep Count
+              </Button>
+              <Button
+                type="submit"
+                variant="destructive"
+                disabled={cancelPending}
+                className="min-w-28"
+              >
+                {cancelPending && <Spinner data-icon="inline-start" />}
+                Cancel Count
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
