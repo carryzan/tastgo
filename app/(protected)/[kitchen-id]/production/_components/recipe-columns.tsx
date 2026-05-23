@@ -15,11 +15,14 @@ export interface Recipe {
   name: string
   track_stock: boolean
   storage_uom_id: string | null
+  storage_uom_abbreviation: string | null
   current_version_id: string | null
   variance_tolerance_percentage: string | null
   is_active: boolean
   created_at: string
   updated_at: string
+  current_quantity: string | number
+  stock_value: string | number
   production_recipe_versions: {
     id: string
     version_number: number
@@ -33,6 +36,8 @@ export interface Recipe {
 export const recipeColumnConfigs: ColumnConfig[] = [
   { column: 'name', label: 'Name', type: 'text', sortable: true },
   { column: 'track_stock', label: 'Track Stock', type: 'boolean' },
+  { column: 'current_quantity', label: 'Stock', type: 'number', sortable: true },
+  { column: 'stock_value', label: 'Value', type: 'number', sortable: true },
   {
     column: 'variance_tolerance_percentage',
     label: 'Variance %',
@@ -42,6 +47,23 @@ export const recipeColumnConfigs: ColumnConfig[] = [
   { column: 'is_active', label: 'Active', type: 'boolean' },
   { column: 'created_at', label: 'Created', type: 'date', sortable: true },
 ]
+
+function formatNumber(value: string | number | null) {
+  if (value == null) return '—'
+  const n = Number(value)
+  if (Number.isNaN(n)) return '—'
+  return n.toLocaleString(undefined, { maximumFractionDigits: 4 })
+}
+
+function formatMoney(value: string | number | null) {
+  if (value == null) return '—'
+  const n = Number(value)
+  if (Number.isNaN(n)) return '—'
+  return n.toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 3,
+  })
+}
 
 export function getRecipeColumns(
   permissions: Permission,
@@ -119,6 +141,23 @@ export function getRecipeColumns(
         return v ? `v${v.version_number}` : '—'
       },
       enableSorting: false,
+    },
+    {
+      accessorKey: 'current_quantity',
+      header: 'Stock',
+      cell: ({ row }) => (
+        <span className="font-mono">
+          {formatNumber(row.original.current_quantity)}{' '}
+          {row.original.storage_uom_abbreviation ?? ''}
+        </span>
+      ),
+      enableSorting: true,
+    },
+    {
+      accessorKey: 'stock_value',
+      header: 'Value',
+      cell: ({ row }) => formatMoney(row.original.stock_value),
+      enableSorting: true,
     },
     {
       accessorKey: 'variance_tolerance_percentage',

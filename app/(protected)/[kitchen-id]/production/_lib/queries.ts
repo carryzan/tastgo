@@ -1,5 +1,5 @@
 export const RECIPES_QUERY_KEY = ['production-recipes']
-export const RECIPES_FROM = 'production_recipes'
+export const RECIPES_FROM = 'v_production_recipes_with_stock'
 // Hint !production_recipe_id disambiguates: production_recipes has two paths to
 // production_recipe_versions (current_version_id FK + reverse production_recipe_id FK).
 // Without the hint PostgREST errors with "more than one relationship found".

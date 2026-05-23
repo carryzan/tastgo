@@ -46,6 +46,16 @@ const STATUS_BADGE: Record<Batch['status'], { label: string; variant: 'secondary
   reversed: { label: 'Reversed', variant: 'destructive' },
 }
 
+function formatMoney(value: string | null, maximumFractionDigits: number) {
+  if (value == null) return '—'
+  const n = Number(value)
+  if (Number.isNaN(n)) return '—'
+  return n.toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits,
+  })
+}
+
 export const batchColumnConfigs: ColumnConfig[] = [
   { column: 'status', label: 'Status', type: 'text', sortable: true },
   { column: 'production_recipes.name', label: 'Recipe', type: 'text', sortable: true },
@@ -185,7 +195,7 @@ export function getBatchColumns(
       header: 'Cost/Unit',
       cell: ({ row }) => {
         const val = row.original.cost_per_unit
-        return val != null ? `$${parseFloat(val).toFixed(4)}` : '—'
+        return formatMoney(val, 4)
       },
       enableSorting: true,
     },
@@ -194,7 +204,7 @@ export function getBatchColumns(
       header: 'Total Cost',
       cell: ({ row }) => {
         const val = row.original.total_cost
-        return val != null ? `$${parseFloat(val).toFixed(2)}` : '—'
+        return formatMoney(val, 2)
       },
       enableSorting: true,
     },
