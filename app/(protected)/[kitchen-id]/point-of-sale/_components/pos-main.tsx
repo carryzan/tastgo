@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useState, useTransition } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   CheckCircle2Icon,
@@ -300,10 +300,39 @@ function ModifierDialog({
   onAdd: (item: PosCatalogItem, modifiers: PosCartLine['modifiers']) => void
 }) {
   const [quantities, setQuantities] = useState<Record<string, number>>({})
+  const [selectedPortions, setSelectedPortions] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!open || !item) return
+    const nextQuantities: Record<string, number> = {}
+    const nextPortions: Record<string, string> = {}
+
+    for (const group of item.modifier_groups) {
+      const defaultPortion = group.portions.find((portion) => portion.is_default)
+      for (const option of group.modifier_options) {
+        if (option.is_default) nextQuantities[option.id] = 1
+        if (defaultPortion) nextPortions[option.id] = defaultPortion.id
+      }
+    }
+
+    queueMicrotask(() => {
+      setQuantities(nextQuantities)
+      setSelectedPortions(nextPortions)
+    })
+  }, [open, item])
 
   function optionQty(optionId: string) {
     return quantities[optionId] ?? 0
+  }
+
+  function optionPortion(group: PosModifierGroup, optionId: string) {
+    return (
+      group.portions.find((portion) => portion.id === selectedPortions[optionId]) ??
+      group.portions.find((portion) => portion.is_default) ??
+      group.portions[0] ??
+      null
+    )
   }
 
   function groupCount(group: PosModifierGroup) {
@@ -320,6 +349,12 @@ function ModifierDialog({
     if (delta > 0 && groupCurrent >= max) return
     const next = Math.max(0, current + delta)
     setQuantities((prev) => ({ ...prev, [option.id]: next }))
+    if (delta > 0 && current === 0 && group.portions.length > 0) {
+      const portion = optionPortion(group, option.id)
+      if (portion) {
+        setSelectedPortions((prev) => ({ ...prev, [option.id]: portion.id }))
+      }
+    }
   }
 
   function submit() {
@@ -340,12 +375,20 @@ function ModifierDialog({
       group.modifier_options.flatMap((option) => {
         const quantity = optionQty(option.id)
         if (quantity <= 0) return []
+        const portion = optionPortion(group, option.id)
+        const portionMultiplier = portion ? numeric(portion.multiplier) : 1
+        const priceMultiplier =
+          option.price_portion_behavior === 'scale_with_portion'
+            ? portionMultiplier
+            : 1
         return [
           {
             modifier_option_id: option.id,
             name: option.name,
             quantity,
-            price_impact: numeric(option.price_charge) * quantity,
+            portion_id: portion?.id ?? null,
+            portion_name: portion?.name ?? null,
+            price_impact: numeric(option.price_charge) * quantity * priceMultiplier,
           },
         ]
       })
@@ -353,6 +396,7 @@ function ModifierDialog({
 
     onAdd(item, modifiers)
     setQuantities({})
+    setSelectedPortions({})
     setError(null)
     onOpenChange(false)
   }
@@ -364,6 +408,7 @@ function ModifierDialog({
         onOpenChange(next)
         if (!next) {
           setQuantities({})
+          setSelectedPortions({})
           setError(null)
         }
       }}
@@ -396,7 +441,30 @@ function ModifierDialog({
                         {formatAmount(option.price_charge)}
                       </p>
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-2">
+                      {group.portions.length > 0 && optionQty(option.id) > 0 ? (
+                        <Select
+                          value={optionPortion(group, option.id)?.id}
+                          onValueChange={(value) =>
+                            setSelectedPortions((prev) => ({
+                              ...prev,
+                              [option.id]: value,
+                            }))
+                          }
+                        >
+                          <SelectTrigger className="h-8 w-28">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {group.portions.map((portion) => (
+                              <SelectItem key={portion.id} value={portion.id}>
+                                {portion.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : null}
+                      <div className="flex items-center gap-1">
                       <Button
                         type="button"
                         variant="outline"
@@ -416,6 +484,7 @@ function ModifierDialog({
                       >
                         <PlusIcon />
                       </Button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -643,6 +712,7 @@ export function PosMain() {
           modifiers: line.modifiers.map((modifier) => ({
             modifier_option_id: modifier.modifier_option_id,
             quantity: modifier.quantity,
+            portion_id: modifier.portion_id ?? null,
           })),
         })),
         combos: cartCombos.map((combo) => ({
@@ -1143,7 +1213,11 @@ function CartPanel({
               title={line.name}
               subtitle={
                 line.modifiers.length > 0
-                  ? line.modifiers.map((m) => `${m.name} x ${m.quantity}`).join(', ')
+                  ? line.modifiers
+                      .map((m) =>
+                        `${m.portion_name ? `${m.portion_name} ` : ''}${m.name} x ${m.quantity}`
+                      )
+                      .join(', ')
                   : undefined
               }
               quantity={line.quantity}
@@ -1551,7 +1625,12 @@ function PosOrderPanel({
                                 {formatQtyInteger(modifier.quantity)}
                               </Badge>
                               <p className="min-w-0 flex-1 text-xs leading-snug text-muted-foreground">
-                                {modifier.modifier_option?.name ?? modifier.modifier_option_id}
+                                {modifier.portion_name_snapshot
+                                  ? `${modifier.portion_name_snapshot} `
+                                  : ''}
+                                {modifier.modifier_option_name_snapshot ??
+                                  modifier.modifier_option?.name ??
+                                  modifier.modifier_option_id}
                               </p>
                             </div>
                             <p className="shrink-0 text-xs font-medium tabular-nums text-muted-foreground">

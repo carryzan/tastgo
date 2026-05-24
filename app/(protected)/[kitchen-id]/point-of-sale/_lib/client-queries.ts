@@ -32,7 +32,19 @@ interface RawMenuItem {
         name: string
         type: string
         price_charge: string | number
+        is_default: boolean
+        price_portion_behavior: 'scale_with_portion' | 'fixed'
         is_active: boolean
+      }[]
+      modifier_group_portions: {
+        sort_order: number
+        is_default: boolean
+        modifier_portion: {
+          id: string
+          name: string
+          multiplier: string | number
+          is_active: boolean
+        } | null
       }[]
     } | null
   }[]
@@ -96,7 +108,12 @@ export async function fetchPosCatalog(kitchenId: string): Promise<PosCatalog> {
               min_selections,
               max_selections,
               is_active,
-              modifier_options(id, name, type, price_charge, is_active)
+              modifier_options(id, name, type, price_charge, is_default, price_portion_behavior, is_active),
+              modifier_group_portions(
+                sort_order,
+                is_default,
+                modifier_portion:modifier_portions!portion_id(id, name, multiplier, is_active)
+              )
             )
           )`
         )
@@ -139,11 +156,29 @@ export async function fetchPosCatalog(kitchenId: string): Promise<PosCatalog> {
           if (!link.modifier_group || !link.modifier_group.is_active) return []
           return [
             {
-              ...link.modifier_group,
+              id: link.modifier_group.id,
+              name: link.modifier_group.name,
+              min_selections: link.modifier_group.min_selections,
+              max_selections: link.modifier_group.max_selections,
+              is_active: link.modifier_group.is_active,
               sort_order: link.sort_order,
               modifier_options: link.modifier_group.modifier_options.filter(
                 (option) => option.is_active
               ),
+              portions: link.modifier_group.modifier_group_portions
+                .flatMap((portionLink) => {
+                  if (!portionLink.modifier_portion?.is_active) return []
+                  return [
+                    {
+                      id: portionLink.modifier_portion.id,
+                      name: portionLink.modifier_portion.name,
+                      multiplier: portionLink.modifier_portion.multiplier,
+                      is_default: portionLink.is_default,
+                      sort_order: portionLink.sort_order,
+                    },
+                  ]
+                })
+                .sort((a, b) => a.sort_order - b.sort_order),
             },
           ]
         })

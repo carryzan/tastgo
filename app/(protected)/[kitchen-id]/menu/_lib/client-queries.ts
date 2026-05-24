@@ -19,6 +19,21 @@ export interface ProductionRecipePick {
   storage_uom_id: string | null
 }
 
+export interface ModifierPortionPick {
+  id: string
+  name: string
+  multiplier: string | number
+  sort_order: number
+  is_active: boolean
+}
+
+export interface ModifierGroupPortionLink {
+  id: string
+  portion_id: string
+  is_default: boolean
+  sort_order: number
+}
+
 export interface MenuItemPick {
   id: string
   name: string
@@ -143,6 +158,34 @@ export async function fetchModifierOptions(
     .order('created_at', { ascending: true })
   if (error) throw new Error(error.message)
   return data ?? []
+}
+
+export async function fetchModifierPortions(kitchenId: string) {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('modifier_portions')
+    .select('id, name, multiplier, sort_order, is_active')
+    .eq('kitchen_id', kitchenId)
+    .eq('is_active', true)
+    .order('sort_order', { ascending: true })
+    .order('name')
+  if (error) throw new Error(error.message)
+  return (data ?? []) as ModifierPortionPick[]
+}
+
+export async function fetchModifierGroupPortions(
+  groupId: string,
+  kitchenId: string
+) {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('modifier_group_portions')
+    .select('id, portion_id, is_default, sort_order')
+    .eq('modifier_group_id', groupId)
+    .eq('kitchen_id', kitchenId)
+    .order('sort_order', { ascending: true })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as ModifierGroupPortionLink[]
 }
 
 export async function fetchMenuItemPicksForBrand(

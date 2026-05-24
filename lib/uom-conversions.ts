@@ -14,6 +14,7 @@ export type InventoryUomContext =
 export type ProductionRecipeUomContext =
   | 'production'
   | 'recipe'
+  | 'modifier'
   | 'count'
   | 'waste'
   | 'opening'
@@ -62,11 +63,13 @@ export interface ProductionRecipeUomConversion {
   factor_to_storage: string | number
   allow_production: boolean
   allow_recipe: boolean
+  allow_modifier: boolean
   allow_count: boolean
   allow_waste: boolean
   allow_opening: boolean
   is_default_production: boolean
   is_default_recipe: boolean
+  is_default_modifier: boolean
   is_default_count: boolean
   is_default_waste: boolean
   is_default_opening: boolean
@@ -217,7 +220,7 @@ export async function fetchProductionRecipeUomConversions(
   const { data, error } = await supabase
     .from('production_recipe_uom_conversions')
     .select(
-      'id, production_recipe_id, uom_id, factor_to_storage, allow_production, allow_recipe, allow_count, allow_waste, allow_opening, is_default_production, is_default_recipe, is_default_count, is_default_waste, is_default_opening'
+      'id, production_recipe_id, uom_id, factor_to_storage, allow_production, allow_recipe, allow_modifier, allow_count, allow_waste, allow_opening, is_default_production, is_default_recipe, is_default_modifier, is_default_count, is_default_waste, is_default_opening'
     )
     .eq('kitchen_id', kitchenId)
     .eq('is_active', true)

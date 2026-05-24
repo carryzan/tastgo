@@ -52,7 +52,9 @@ function renderItems(order: OrderDetail): string {
         </div>
     `)
     for (const mod of item.order_item_modifiers) {
-      const modName = mod.modifier_option?.name ?? '—'
+      const modName = `${mod.portion_name_snapshot ? `${mod.portion_name_snapshot} ` : ''}${
+        mod.modifier_option_name_snapshot ?? mod.modifier_option?.name ?? '—'
+      }`
       const modQty = formatQty(mod.quantity)
       const modPrice = formatAmount(mod.price_impact)
       lines.push(`

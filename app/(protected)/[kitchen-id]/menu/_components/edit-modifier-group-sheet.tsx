@@ -1,13 +1,21 @@
 'use client'
 
-import { useState, useTransition } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
-import { updateModifierGroup } from '../_lib/modifier-group-actions'
+import { useEffect, useState, useTransition } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  saveModifierGroupPortions,
+  updateModifierGroup,
+} from '../_lib/modifier-group-actions'
 import { MODIFIER_GROUPS_QUERY_KEY } from '../_lib/queries'
 import { mapMenuDbError } from '../_lib/db-errors'
+import {
+  fetchModifierGroupPortions,
+  fetchModifierPortions,
+} from '../_lib/client-queries'
 import type { ModifierGroup } from './modifier-group-columns'
 import { MenuBrandField, useMenuBrandOptions } from './menu-brand-field'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
@@ -31,6 +39,13 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 interface EditModifierGroupSheetProps {
   group: ModifierGroup
@@ -55,13 +70,52 @@ export function EditModifierGroupSheet({
     group.max_selections == null ? '' : String(group.max_selections)
   )
   const [groupActive, setGroupActive] = useState(group.is_active)
+  const [selectedPortionIds, setSelectedPortionIds] = useState<Set<string>>(
+    new Set()
+  )
+  const [defaultPortionId, setDefaultPortionId] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
+  const { data: portions = [] } = useQuery({
+    queryKey: ['modifier-portions', group.kitchen_id],
+    queryFn: () => fetchModifierPortions(group.kitchen_id),
+    enabled: open,
+  })
+  const { data: groupPortions = [] } = useQuery({
+    queryKey: ['modifier-group-portions', group.id, group.kitchen_id],
+    queryFn: () => fetchModifierGroupPortions(group.id, group.kitchen_id),
+    enabled: open,
+  })
+
+  useEffect(() => {
+    if (!open) return
+    const selected = new Set(groupPortions.map((portion) => portion.portion_id))
+    const nextDefault =
+      groupPortions.find((portion) => portion.is_default)?.portion_id ??
+      groupPortions[0]?.portion_id ??
+      ''
+    queueMicrotask(() => {
+      setSelectedPortionIds(selected)
+      setDefaultPortionId(nextDefault)
+    })
+  }, [open, groupPortions])
 
   function handleOpenChange(next: boolean) {
     if (pending) return
     onOpenChange(next)
     if (!next) setError(null)
+  }
+
+  function togglePortion(portionId: string, checked: boolean) {
+    setSelectedPortionIds((current) => {
+      const next = new Set(current)
+      if (checked) next.add(portionId)
+      else next.delete(portionId)
+      if (!next.has(defaultPortionId)) {
+        setDefaultPortionId(next.values().next().value ?? '')
+      }
+      return next
+    })
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -93,6 +147,18 @@ export function EditModifierGroupSheet({
           is_active: groupActive,
         })
         if (gRes instanceof Error) return setError(mapMenuDbError(gRes))
+
+        const portionIds = Array.from(selectedPortionIds)
+        const pRes = await saveModifierGroupPortions(
+          group.id,
+          group.kitchen_id,
+          portionIds.map((portionId, index) => ({
+            portion_id: portionId,
+            is_default: portionId === defaultPortionId,
+            sort_order: index,
+          }))
+        )
+        if (pRes instanceof Error) return setError(mapMenuDbError(pRes))
 
         onOpenChange(false)
         queryClient.invalidateQueries({ queryKey: MODIFIER_GROUPS_QUERY_KEY })
@@ -164,6 +230,63 @@ export function EditModifierGroupSheet({
                   />
                 </Field>
               </div>
+              <Field>
+                <FieldLabel>Portions</FieldLabel>
+                <div className="grid gap-2 rounded-md border p-3">
+                  {portions.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No portions are available.
+                    </p>
+                  ) : (
+                    portions.map((portion) => {
+                      const selected = selectedPortionIds.has(portion.id)
+                      return (
+                        <label
+                          key={portion.id}
+                          className="flex items-center justify-between gap-3 text-sm"
+                        >
+                          <span>
+                            {portion.name}{' '}
+                            <span className="text-muted-foreground">
+                              x{Number(portion.multiplier).toLocaleString()}
+                            </span>
+                          </span>
+                          <Checkbox
+                            checked={selected}
+                            onCheckedChange={(checked) =>
+                              togglePortion(portion.id, checked === true)
+                            }
+                            disabled={pending}
+                          />
+                        </label>
+                      )
+                    })
+                  )}
+                </div>
+              </Field>
+              {selectedPortionIds.size > 0 && (
+                <Field>
+                  <FieldLabel>Default portion</FieldLabel>
+                  <Select
+                    value={defaultPortionId || undefined}
+                    onValueChange={setDefaultPortionId}
+                    disabled={pending}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select default" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {portions
+                        .filter((portion) => selectedPortionIds.has(portion.id))
+                        .map((portion) => (
+                          <SelectItem key={portion.id} value={portion.id}>
+                            {portion.name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              )}
               <Field>
                 <div className="flex items-center justify-between">
                   <FieldLabel htmlFor="mg-active">Active</FieldLabel>

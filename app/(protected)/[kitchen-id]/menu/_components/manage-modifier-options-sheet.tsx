@@ -6,21 +6,29 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useKitchen } from '@/hooks/use-kitchen'
 import {
   buildInventoryUomOptions,
+  buildProductionRecipeUomOptions,
   defaultUomId,
   fetchInventoryUomConversions,
+  fetchProductionRecipeUomConversions,
   type InventoryUomConversion,
   type KitchenUom,
+  type ProductionRecipeUomConversion,
 } from '@/lib/uom-conversions'
 import {
   saveModifierGroupOptions,
+  type ModifierComponentType,
+  type ModifierOptionInput,
   type ModifierOptionType,
+  type ModifierPricePortionBehavior,
 } from '../_lib/modifier-option-actions'
 import { MODIFIER_GROUPS_QUERY_KEY } from '../_lib/queries'
 import { mapMenuDbError } from '../_lib/db-errors'
 import {
   fetchActiveInventoryItemPicks,
+  fetchActiveProductionRecipes,
   fetchModifierOptions,
   type InventoryItemBasicPick,
+  type ProductionRecipePick,
 } from '../_lib/client-queries'
 import type { ModifierGroup } from './modifier-group-columns'
 import { Button } from '@/components/ui/button'
@@ -58,12 +66,18 @@ interface LocalOption {
   id?: string
   name: string
   type: ModifierOptionType
+  component_type: ModifierComponentType | 'none'
   inventory_item_id: string
+  production_recipe_id: string
+  removed_component_type: ModifierComponentType | 'none'
   removed_inventory_item_id: string
+  removed_production_recipe_id: string
   quantity: string
   uom_id: string
   price_charge: string
   is_active: boolean
+  is_default: boolean
+  price_portion_behavior: ModifierPricePortionBehavior
 }
 
 const OPTION_TYPES: ModifierOptionType[] = [
@@ -78,12 +92,18 @@ function newLocalOption(): LocalOption {
     key: crypto.randomUUID(),
     name: '',
     type: 'neutral',
+    component_type: 'none',
     inventory_item_id: '',
+    production_recipe_id: '',
+    removed_component_type: 'none',
     removed_inventory_item_id: '',
+    removed_production_recipe_id: '',
     quantity: '',
     uom_id: '',
     price_charge: '0',
     is_active: true,
+    is_default: false,
+    price_portion_behavior: 'scale_with_portion',
   }
 }
 
@@ -111,6 +131,11 @@ export function ManageModifierOptionsSheet({
     queryFn: () => fetchActiveInventoryItemPicks(group.kitchen_id),
     enabled: open,
   })
+  const { data: productionRecipes = [] } = useQuery<ProductionRecipePick[]>({
+    queryKey: ['modifier-option-production-recipe-picks', group.kitchen_id],
+    queryFn: () => fetchActiveProductionRecipes(group.kitchen_id),
+    enabled: open,
+  })
   const { data: fetchedOptions = [], isError: optionsLoadError } = useQuery({
     queryKey: ['modifier-options', group.id, group.kitchen_id],
     queryFn: () => fetchModifierOptions(group.id, group.kitchen_id),
@@ -121,6 +146,13 @@ export function ManageModifierOptionsSheet({
     queryFn: () => fetchInventoryUomConversions(group.kitchen_id),
     enabled: open,
   })
+  const { data: productionUomConversions = [] } = useQuery<
+    ProductionRecipeUomConversion[]
+  >({
+    queryKey: ['production-recipe-uom-conversions', group.kitchen_id],
+    queryFn: () => fetchProductionRecipeUomConversions(group.kitchen_id),
+    enabled: open,
+  })
 
   const invIds = useMemo(() => inventoryItems.map((i) => i.id), [inventoryItems])
   const invLabelById = useMemo(() => {
@@ -128,24 +160,57 @@ export function ManageModifierOptionsSheet({
     for (const i of inventoryItems) m.set(i.id, i.name)
     return m
   }, [inventoryItems])
+  const productionRecipeIds = useMemo(
+    () => productionRecipes.map((recipe) => recipe.id),
+    [productionRecipes]
+  )
+  const productionRecipeLabelById = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const recipe of productionRecipes) m.set(recipe.id, recipe.name)
+    return m
+  }, [productionRecipes])
 
-  const fetchedOptionRows = useMemo(
+  const fetchedOptionRows = useMemo<LocalOption[]>(
     () =>
       fetchedOptions.map((option) => {
         const id = String(option.id)
+        const componentType: ModifierComponentType | 'none' =
+          (option.component_type as ModifierComponentType | null) ??
+          (option.inventory_item_id
+            ? 'inventory_item'
+            : option.production_recipe_id
+              ? 'production_recipe'
+              : 'none')
+        const removedComponentType: ModifierComponentType | 'none' =
+          (option.removed_component_type as ModifierComponentType | null) ??
+          (option.removed_inventory_item_id
+            ? 'inventory_item'
+            : option.removed_production_recipe_id
+              ? 'production_recipe'
+              : 'none')
         return {
           key: id,
           id,
           name: String(option.name ?? ''),
           type: (option.type as ModifierOptionType) ?? 'neutral',
+          component_type: componentType,
           inventory_item_id: String(option.inventory_item_id ?? ''),
+          production_recipe_id: String(option.production_recipe_id ?? ''),
+          removed_component_type: removedComponentType,
           removed_inventory_item_id: String(
             option.removed_inventory_item_id ?? ''
+          ),
+          removed_production_recipe_id: String(
+            option.removed_production_recipe_id ?? ''
           ),
           quantity: option.quantity == null ? '' : String(option.quantity),
           uom_id: String(option.uom_id ?? ''),
           price_charge: String(option.price_charge ?? '0'),
           is_active: Boolean(option.is_active),
+          is_default: Boolean(option.is_default),
+          price_portion_behavior:
+            (option.price_portion_behavior as ModifierPricePortionBehavior | null) ??
+            'scale_with_portion',
         }
       }),
     [fetchedOptions]
@@ -175,6 +240,32 @@ export function ManageModifierOptionsSheet({
     })
   }
 
+  function optionUomOptions(option: LocalOption) {
+    if (option.component_type === 'inventory_item') {
+      return buildInventoryUomOptions(
+        inventoryItems.find((item) => item.id === option.inventory_item_id),
+        uomConversions,
+        uoms,
+        'modifier'
+      )
+    }
+
+    if (option.component_type === 'production_recipe') {
+      return buildProductionRecipeUomOptions(
+        productionRecipes.find((recipe) => recipe.id === option.production_recipe_id),
+        productionUomConversions,
+        uoms,
+        'modifier'
+      )
+    }
+
+    return []
+  }
+
+  function defaultModifierUomId(option: LocalOption) {
+    return defaultUomId(optionUomOptions(option))
+  }
+
   function validateOptions(): string | null {
     for (const o of options) {
       if (!o.name.trim()) return 'Each option needs a name.'
@@ -186,16 +277,37 @@ export function ManageModifierOptionsSheet({
         if (o.quantity.trim() === '' || Number.isNaN(q) || q <= 0) {
           return `Option "${o.name}": quantity is required for ${o.type} type.`
         }
-        if (!o.inventory_item_id) {
+        if (o.component_type === 'none') {
+          return `Option "${o.name}": select an added component for ${o.type} type.`
+        }
+        if (o.component_type === 'inventory_item' && !o.inventory_item_id) {
           return `Option "${o.name}": select an inventory item for ${o.type} type.`
+        }
+        if (
+          o.component_type === 'production_recipe' &&
+          !o.production_recipe_id
+        ) {
+          return `Option "${o.name}": select a production recipe for ${o.type} type.`
         }
         if (!o.uom_id) {
           return `Option "${o.name}": configure and select a modifier UOM.`
         }
       }
       if (o.type === 'removal' || o.type === 'substitution') {
-        if (!o.removed_inventory_item_id) {
-          return `Option "${o.name}": select the item being removed for ${o.type} type.`
+        if (o.removed_component_type === 'none') {
+          return `Option "${o.name}": select the component being removed for ${o.type} type.`
+        }
+        if (
+          o.removed_component_type === 'inventory_item' &&
+          !o.removed_inventory_item_id
+        ) {
+          return `Option "${o.name}": select the inventory item being removed for ${o.type} type.`
+        }
+        if (
+          o.removed_component_type === 'production_recipe' &&
+          !o.removed_production_recipe_id
+        ) {
+          return `Option "${o.name}": select the production recipe being removed for ${o.type} type.`
         }
       }
     }
@@ -221,12 +333,30 @@ export function ManageModifierOptionsSheet({
 
     startTransition(async () => {
       try {
-        const payload = options.map((o) => ({
+        const payload: ModifierOptionInput[] = options.map((o) => ({
           id: o.id,
           name: o.name.trim(),
           type: o.type,
-          inventory_item_id: o.inventory_item_id || null,
-          removed_inventory_item_id: o.removed_inventory_item_id || null,
+          component_type:
+            o.component_type === 'none' ? null : o.component_type,
+          inventory_item_id:
+            o.component_type === 'inventory_item'
+              ? o.inventory_item_id || null
+              : null,
+          production_recipe_id:
+            o.component_type === 'production_recipe'
+              ? o.production_recipe_id || null
+              : null,
+          removed_component_type:
+            o.removed_component_type === 'none' ? null : o.removed_component_type,
+          removed_inventory_item_id:
+            o.removed_component_type === 'inventory_item'
+              ? o.removed_inventory_item_id || null
+              : null,
+          removed_production_recipe_id:
+            o.removed_component_type === 'production_recipe'
+              ? o.removed_production_recipe_id || null
+              : null,
           quantity:
             o.type === 'removal' && o.quantity.trim() === ''
               ? null
@@ -236,6 +366,8 @@ export function ManageModifierOptionsSheet({
           uom_id: o.uom_id || null,
           price_charge: Number.parseFloat(o.price_charge),
           is_active: o.is_active,
+          is_default: o.is_default,
+          price_portion_behavior: o.price_portion_behavior,
         }))
 
         const oRes = await saveModifierGroupOptions(
@@ -292,7 +424,7 @@ export function ManageModifierOptionsSheet({
             </Button>
           </div>
           <div className="flex-1 overflow-x-auto overflow-y-auto">
-            <table className="w-full min-w-[700px] table-fixed text-sm">
+            <table className="w-full min-w-[1180px] table-fixed text-sm">
               <colgroup>
                 <col />
                 <col className="w-28" />
@@ -300,6 +432,8 @@ export function ManageModifierOptionsSheet({
                 <col />
                 <col className="w-16" />
                 <col className="w-24" />
+                <col className="w-20" />
+                <col className="w-28" />
                 <col className="w-20" />
                 <col className="w-14" />
                 <col className="w-12" />
@@ -328,6 +462,12 @@ export function ManageModifierOptionsSheet({
                     Price
                   </th>
                   <th className="px-2 py-2 text-left font-medium text-muted-foreground">
+                    Portion
+                  </th>
+                  <th className="px-2 py-2 text-left font-medium text-muted-foreground">
+                    Default
+                  </th>
+                  <th className="px-2 py-2 text-left font-medium text-muted-foreground">
                     On
                   </th>
                   <th className="w-10" />
@@ -337,7 +477,7 @@ export function ManageModifierOptionsSheet({
                 {options.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={9}
+                      colSpan={11}
                       className="py-8 pl-4 text-center text-sm text-muted-foreground"
                     >
                       No options yet. Add one to get started.
@@ -358,15 +498,49 @@ export function ManageModifierOptionsSheet({
                       <td className="px-2 py-1.5">
                         <Select
                           value={o.type}
-                          onValueChange={(v) =>
+                          onValueChange={(v) => {
+                            const nextType = v as ModifierOptionType
+                            const nextComponentType: ModifierComponentType | 'none' =
+                              nextType === 'addition' || nextType === 'substitution'
+                                ? o.component_type === 'none'
+                                  ? 'inventory_item'
+                                  : o.component_type
+                                : 'none'
+                            const nextRemovedComponentType:
+                              | ModifierComponentType
+                              | 'none' =
+                              nextType === 'removal' || nextType === 'substitution'
+                                ? o.removed_component_type === 'none'
+                                  ? 'inventory_item'
+                                  : o.removed_component_type
+                                : 'none'
+
                             updateOption(idx, {
-                              type: v as ModifierOptionType,
+                              type: nextType,
+                              component_type: nextComponentType,
+                              inventory_item_id:
+                                nextType === 'addition' || nextType === 'substitution'
+                                  ? o.inventory_item_id
+                                  : '',
+                              production_recipe_id:
+                                nextType === 'addition' || nextType === 'substitution'
+                                  ? o.production_recipe_id
+                                  : '',
                               uom_id:
-                                v === 'addition' || v === 'substitution'
+                                nextType === 'addition' || nextType === 'substitution'
                                   ? o.uom_id
                                   : '',
+                              removed_component_type: nextRemovedComponentType,
+                              removed_inventory_item_id:
+                                nextType === 'removal' || nextType === 'substitution'
+                                  ? o.removed_inventory_item_id
+                                  : '',
+                              removed_production_recipe_id:
+                                nextType === 'removal' || nextType === 'substitution'
+                                  ? o.removed_production_recipe_id
+                                  : '',
                             })
-                          }
+                          }}
                         >
                           <SelectTrigger className="w-full">
                             <SelectValue />
@@ -382,80 +556,177 @@ export function ManageModifierOptionsSheet({
                       </td>
                       <td className="px-2 py-1.5">
                         {o.type === 'addition' || o.type === 'substitution' ? (
-                          <Combobox
-                            items={invIds}
-                            value={o.inventory_item_id || null}
-                            onValueChange={(next) =>
-                              {
-                                const inventoryItem =
-                                  inventoryItems.find((item) => item.id === next) ?? null
+                          <div className="grid gap-1">
+                            <Select
+                              value={o.component_type}
+                              onValueChange={(value) => {
+                                const componentType = value as ModifierComponentType
+                                const nextOption = {
+                                  ...o,
+                                  component_type: componentType,
+                                  inventory_item_id: '',
+                                  production_recipe_id: '',
+                                }
                                 updateOption(idx, {
-                                  inventory_item_id: next ?? '',
-                                  uom_id: defaultUomId(
-                                    buildInventoryUomOptions(
-                                      inventoryItem,
-                                      uomConversions,
-                                      uoms,
-                                      'modifier'
-                                    )
-                                  ),
+                                  component_type: componentType,
+                                  inventory_item_id: '',
+                                  production_recipe_id: '',
+                                  uom_id: defaultModifierUomId(nextOption),
                                 })
-                              }
-                            }
-                            modal
-                            itemToStringLabel={(id) =>
-                              invLabelById.get(String(id)) ?? ''
-                            }
-                          >
-                            <ComboboxInput
-                              placeholder="Item"
-                              className="w-full"
-                            />
-                            <ComboboxContent className="z-100 pointer-events-auto">
-                              <ComboboxEmpty>No items.</ComboboxEmpty>
-                              <ComboboxList>
-                                {(id: string) => (
-                                  <ComboboxItem key={id} value={id}>
-                                    {invLabelById.get(id) ?? id}
-                                  </ComboboxItem>
-                                )}
-                              </ComboboxList>
-                            </ComboboxContent>
-                          </Combobox>
+                              }}
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="inventory_item">Inventory</SelectItem>
+                                <SelectItem value="production_recipe">Recipe</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            {o.component_type === 'production_recipe' ? (
+                              <Combobox
+                                items={productionRecipeIds}
+                                value={o.production_recipe_id || null}
+                                onValueChange={(next) => {
+                                  const nextOption = {
+                                    ...o,
+                                    production_recipe_id: next ?? '',
+                                  }
+                                  updateOption(idx, {
+                                    production_recipe_id: next ?? '',
+                                    uom_id: defaultModifierUomId(nextOption),
+                                  })
+                                }}
+                                modal
+                                itemToStringLabel={(id) =>
+                                  productionRecipeLabelById.get(String(id)) ?? ''
+                                }
+                              >
+                                <ComboboxInput placeholder="Recipe" className="w-full" />
+                                <ComboboxContent className="z-100 pointer-events-auto">
+                                  <ComboboxEmpty>No recipes.</ComboboxEmpty>
+                                  <ComboboxList>
+                                    {(id: string) => (
+                                      <ComboboxItem key={id} value={id}>
+                                        {productionRecipeLabelById.get(id) ?? id}
+                                      </ComboboxItem>
+                                    )}
+                                  </ComboboxList>
+                                </ComboboxContent>
+                              </Combobox>
+                            ) : (
+                              <Combobox
+                                items={invIds}
+                                value={o.inventory_item_id || null}
+                                onValueChange={(next) => {
+                                  const nextOption = {
+                                    ...o,
+                                    inventory_item_id: next ?? '',
+                                  }
+                                  updateOption(idx, {
+                                    inventory_item_id: next ?? '',
+                                    uom_id: defaultModifierUomId(nextOption),
+                                  })
+                                }}
+                                modal
+                                itemToStringLabel={(id) =>
+                                  invLabelById.get(String(id)) ?? ''
+                                }
+                              >
+                                <ComboboxInput placeholder="Item" className="w-full" />
+                                <ComboboxContent className="z-100 pointer-events-auto">
+                                  <ComboboxEmpty>No items.</ComboboxEmpty>
+                                  <ComboboxList>
+                                    {(id: string) => (
+                                      <ComboboxItem key={id} value={id}>
+                                        {invLabelById.get(id) ?? id}
+                                      </ComboboxItem>
+                                    )}
+                                  </ComboboxList>
+                                </ComboboxContent>
+                              </Combobox>
+                            )}
+                          </div>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
                       </td>
                       <td className="px-2 py-1.5">
                         {o.type === 'removal' || o.type === 'substitution' ? (
-                          <Combobox
-                            items={invIds}
-                            value={o.removed_inventory_item_id || null}
-                            onValueChange={(next) =>
-                              updateOption(idx, {
-                                removed_inventory_item_id: next ?? '',
-                              })
-                            }
-                            modal
-                            itemToStringLabel={(id) =>
-                              invLabelById.get(String(id)) ?? ''
-                            }
-                          >
-                            <ComboboxInput
-                              placeholder="Removed"
-                              className="w-full"
-                            />
-                            <ComboboxContent className="z-100 pointer-events-auto">
-                              <ComboboxEmpty>No items.</ComboboxEmpty>
-                              <ComboboxList>
-                                {(id: string) => (
-                                  <ComboboxItem key={id} value={id}>
-                                    {invLabelById.get(id) ?? id}
-                                  </ComboboxItem>
-                                )}
-                              </ComboboxList>
-                            </ComboboxContent>
-                          </Combobox>
+                          <div className="grid gap-1">
+                            <Select
+                              value={o.removed_component_type}
+                              onValueChange={(value) =>
+                                updateOption(idx, {
+                                  removed_component_type:
+                                    value as ModifierComponentType,
+                                  removed_inventory_item_id: '',
+                                  removed_production_recipe_id: '',
+                                })
+                              }
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="inventory_item">Inventory</SelectItem>
+                                <SelectItem value="production_recipe">Recipe</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            {o.removed_component_type === 'production_recipe' ? (
+                              <Combobox
+                                items={productionRecipeIds}
+                                value={o.removed_production_recipe_id || null}
+                                onValueChange={(next) =>
+                                  updateOption(idx, {
+                                    removed_production_recipe_id: next ?? '',
+                                  })
+                                }
+                                modal
+                                itemToStringLabel={(id) =>
+                                  productionRecipeLabelById.get(String(id)) ?? ''
+                                }
+                              >
+                                <ComboboxInput placeholder="Removed recipe" className="w-full" />
+                                <ComboboxContent className="z-100 pointer-events-auto">
+                                  <ComboboxEmpty>No recipes.</ComboboxEmpty>
+                                  <ComboboxList>
+                                    {(id: string) => (
+                                      <ComboboxItem key={id} value={id}>
+                                        {productionRecipeLabelById.get(id) ?? id}
+                                      </ComboboxItem>
+                                    )}
+                                  </ComboboxList>
+                                </ComboboxContent>
+                              </Combobox>
+                            ) : (
+                              <Combobox
+                                items={invIds}
+                                value={o.removed_inventory_item_id || null}
+                                onValueChange={(next) =>
+                                  updateOption(idx, {
+                                    removed_inventory_item_id: next ?? '',
+                                  })
+                                }
+                                modal
+                                itemToStringLabel={(id) =>
+                                  invLabelById.get(String(id)) ?? ''
+                                }
+                              >
+                                <ComboboxInput placeholder="Removed" className="w-full" />
+                                <ComboboxContent className="z-100 pointer-events-auto">
+                                  <ComboboxEmpty>No items.</ComboboxEmpty>
+                                  <ComboboxList>
+                                    {(id: string) => (
+                                      <ComboboxItem key={id} value={id}>
+                                        {invLabelById.get(id) ?? id}
+                                      </ComboboxItem>
+                                    )}
+                                  </ComboboxList>
+                                </ComboboxContent>
+                              </Combobox>
+                            )}
+                          </div>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
@@ -482,24 +753,14 @@ export function ManageModifierOptionsSheet({
                               updateOption(idx, { uom_id: value })
                             }
                             disabled={
-                              buildInventoryUomOptions(
-                                inventoryItems.find((item) => item.id === o.inventory_item_id),
-                                uomConversions,
-                                uoms,
-                                'modifier'
-                              ).length === 0
+                              optionUomOptions(o).length === 0
                             }
                           >
                             <SelectTrigger className="w-full">
                               <SelectValue placeholder="UOM" />
                             </SelectTrigger>
                             <SelectContent>
-                              {buildInventoryUomOptions(
-                                inventoryItems.find((item) => item.id === o.inventory_item_id),
-                                uomConversions,
-                                uoms,
-                                'modifier'
-                              ).map((uom) => (
+                              {optionUomOptions(o).map((uom) => (
                                 <SelectItem key={uom.uom_id} value={uom.uom_id}>
                                   {uom.label}
                                 </SelectItem>
@@ -516,6 +777,33 @@ export function ManageModifierOptionsSheet({
                           value={o.price_charge}
                           onChange={(e) =>
                             updateOption(idx, { price_charge: e.target.value })
+                          }
+                        />
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <Select
+                          value={o.price_portion_behavior}
+                          onValueChange={(value) =>
+                            updateOption(idx, {
+                              price_portion_behavior:
+                                value as ModifierPricePortionBehavior,
+                            })
+                          }
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="scale_with_portion">Scale</SelectItem>
+                            <SelectItem value="fixed">Fixed</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <Checkbox
+                          checked={o.is_default}
+                          onCheckedChange={(c) =>
+                            updateOption(idx, { is_default: c === true })
                           }
                         />
                       </td>

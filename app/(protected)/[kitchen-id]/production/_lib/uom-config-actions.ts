@@ -9,11 +9,13 @@ export interface ProductionRecipeUomConversionInput {
   factor_to_storage: number
   allow_production: boolean
   allow_recipe: boolean
+  allow_modifier: boolean
   allow_count: boolean
   allow_waste: boolean
   allow_opening: boolean
   is_default_production: boolean
   is_default_recipe: boolean
+  is_default_modifier: boolean
   is_default_count: boolean
   is_default_waste: boolean
   is_default_opening: boolean

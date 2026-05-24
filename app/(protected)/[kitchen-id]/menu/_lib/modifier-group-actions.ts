@@ -9,15 +9,24 @@ export type ModifierOptionType =
   | 'substitution'
   | 'neutral'
 
+type ModifierComponentType = 'inventory_item' | 'production_recipe'
+type ModifierPricePortionBehavior = 'scale_with_portion' | 'fixed'
+
 interface CreateModifierGroupOptionData {
   name: string
   type: ModifierOptionType
+  component_type: ModifierComponentType | null
   inventory_item_id: string | null
+  production_recipe_id: string | null
+  removed_component_type: ModifierComponentType | null
   removed_inventory_item_id: string | null
+  removed_production_recipe_id: string | null
   quantity: number | null
   uom_id: string | null
   price_charge: number
   is_active: boolean
+  is_default: boolean
+  price_portion_behavior: ModifierPricePortionBehavior
 }
 
 export async function createModifierGroup(data: {
@@ -40,12 +49,18 @@ export async function createModifierGroup(data: {
       p_options: data.options.map((option) => ({
         name: option.name,
         type: option.type,
+        component_type: option.component_type,
         inventory_item_id: option.inventory_item_id,
+        production_recipe_id: option.production_recipe_id,
+        removed_component_type: option.removed_component_type,
         removed_inventory_item_id: option.removed_inventory_item_id,
+        removed_production_recipe_id: option.removed_production_recipe_id,
         quantity: option.quantity,
         uom_id: option.uom_id,
         price_charge: option.price_charge,
         is_active: option.is_active,
+        is_default: option.is_default,
+        price_portion_behavior: option.price_portion_behavior,
       })),
     }
   )
@@ -73,6 +88,85 @@ export async function updateModifierGroup(
     .eq('id', id)
     .eq('kitchen_id', kitchenId)
   if (error) return new Error(error.message)
+  revalidatePath(`/${kitchenId}/menu`)
+}
+
+export async function saveModifierGroupPortions(
+  modifierGroupId: string,
+  kitchenId: string,
+  portions: {
+    portion_id: string
+    is_default: boolean
+    sort_order: number
+  }[]
+) {
+  const supabase = await createClient()
+  const normalizedPortions = portions.map((portion, index) => ({
+    ...portion,
+    is_default:
+      portion.is_default ||
+      (!portions.some((candidate) => candidate.is_default) && index === 0),
+  }))
+
+  const { data: existing, error: fetchError } = await supabase
+    .from('modifier_group_portions')
+    .select('id, portion_id')
+    .eq('modifier_group_id', modifierGroupId)
+    .eq('kitchen_id', kitchenId)
+
+  if (fetchError) return new Error(fetchError.message)
+
+  if ((existing ?? []).length > 0) {
+    const { error: clearDefaultError } = await supabase
+      .from('modifier_group_portions')
+      .update({ is_default: false })
+      .eq('modifier_group_id', modifierGroupId)
+      .eq('kitchen_id', kitchenId)
+    if (clearDefaultError) return new Error(clearDefaultError.message)
+  }
+
+  const incomingIds = new Set(
+    normalizedPortions.map((portion) => portion.portion_id)
+  )
+  const toRemove = (existing ?? [])
+    .filter((row) => !incomingIds.has(String(row.portion_id)))
+    .map((row) => String(row.id))
+
+  if (toRemove.length > 0) {
+    const { error: deleteError } = await supabase
+      .from('modifier_group_portions')
+      .delete()
+      .in('id', toRemove)
+    if (deleteError) return new Error(deleteError.message)
+  }
+
+  for (const portion of normalizedPortions) {
+    const existingRow = (existing ?? []).find(
+      (row) => String(row.portion_id) === portion.portion_id
+    )
+    const payload = {
+      kitchen_id: kitchenId,
+      modifier_group_id: modifierGroupId,
+      portion_id: portion.portion_id,
+      is_default: portion.is_default,
+      sort_order: portion.sort_order,
+    }
+
+    if (existingRow) {
+      const { error } = await supabase
+        .from('modifier_group_portions')
+        .update(payload)
+        .eq('id', existingRow.id)
+        .eq('kitchen_id', kitchenId)
+      if (error) return new Error(error.message)
+    } else {
+      const { error } = await supabase
+        .from('modifier_group_portions')
+        .insert(payload)
+      if (error) return new Error(error.message)
+    }
+  }
+
   revalidatePath(`/${kitchenId}/menu`)
 }
 

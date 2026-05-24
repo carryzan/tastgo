@@ -57,6 +57,7 @@ interface UomConfigSheetProps {
 const CONTEXTS = [
   ['production', 'Production'],
   ['recipe', 'Recipe'],
+  ['modifier', 'Modifier'],
   ['count', 'Count'],
   ['waste', 'Waste'],
   ['opening', 'Opening'],
@@ -76,11 +77,13 @@ function createRow(uomId: string): ConversionRow {
     factor_to_storage: 1,
     allow_production: true,
     allow_recipe: true,
+    allow_modifier: true,
     allow_count: true,
     allow_waste: true,
     allow_opening: true,
     is_default_production: false,
     is_default_recipe: false,
+    is_default_modifier: false,
     is_default_count: false,
     is_default_waste: false,
     is_default_opening: false,
@@ -95,11 +98,13 @@ function toInput(row: ConversionRow): ProductionRecipeUomConversionInput {
     factor_to_storage: row.factor_to_storage,
     allow_production: row.allow_production,
     allow_recipe: row.allow_recipe,
+    allow_modifier: row.allow_modifier,
     allow_count: row.allow_count,
     allow_waste: row.allow_waste,
     allow_opening: row.allow_opening,
     is_default_production: row.is_default_production,
     is_default_recipe: row.is_default_recipe,
+    is_default_modifier: row.is_default_modifier,
     is_default_count: row.is_default_count,
     is_default_waste: row.is_default_waste,
     is_default_opening: row.is_default_opening,
@@ -179,6 +184,7 @@ export function UomConfigSheet({
         identity.factor_to_storage = 1
         identity.is_default_production = true
         identity.is_default_recipe = true
+        identity.is_default_modifier = true
         identity.is_default_count = true
         identity.is_default_waste = true
         identity.is_default_opening = true

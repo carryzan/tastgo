@@ -59,10 +59,16 @@ export interface OrderRow {
 export interface OrderModifierLine {
   id: string
   modifier_option_id: string
+  modifier_group_id: string | null
+  portion_id: string | null
   quantity: string | number
   price_impact: string | number
   cogs_impact: string | number
   type: string
+  modifier_group_name_snapshot: string | null
+  modifier_option_name_snapshot: string | null
+  portion_name_snapshot: string | null
+  portion_multiplier_snapshot: string | number | null
   modifier_option: {
     id: string
     name: string
@@ -151,6 +157,8 @@ export interface PosCartModifier {
   modifier_option_id: string
   name: string
   quantity: number
+  portion_id?: string | null
+  portion_name?: string | null
   price_impact: number
 }
 
@@ -199,7 +207,17 @@ export interface PosModifierOption {
   name: string
   type: string
   price_charge: string | number
+  is_default: boolean
+  price_portion_behavior: 'scale_with_portion' | 'fixed'
   is_active: boolean
+}
+
+export interface PosModifierPortion {
+  id: string
+  name: string
+  multiplier: string | number
+  is_default: boolean
+  sort_order: number
 }
 
 export interface PosModifierGroup {
@@ -210,6 +228,7 @@ export interface PosModifierGroup {
   is_active: boolean
   sort_order: number
   modifier_options: PosModifierOption[]
+  portions: PosModifierPortion[]
 }
 
 export interface PosCatalogItem {

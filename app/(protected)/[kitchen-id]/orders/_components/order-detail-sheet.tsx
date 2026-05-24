@@ -230,7 +230,12 @@ export function OrderDetailSheet({
                                       className="flex items-center justify-between text-xs text-muted-foreground"
                                     >
                                       <span>
-                                        {modifier.modifier_option?.name ?? modifier.modifier_option_id}
+                                        {modifier.portion_name_snapshot
+                                          ? `${modifier.portion_name_snapshot} `
+                                          : ''}
+                                        {modifier.modifier_option_name_snapshot ??
+                                          modifier.modifier_option?.name ??
+                                          modifier.modifier_option_id}
                                         {' x '}
                                         {formatAmount(modifier.quantity)}
                                       </span>

@@ -16,6 +16,7 @@ interface CreatePosOrderItemInput {
   modifiers: {
     modifier_option_id: string
     quantity: number
+    portion_id?: string | null
   }[]
 }
 
@@ -85,6 +86,7 @@ export async function createPosOrder(
       modifiers: item.modifiers.map((modifier) => ({
         modifier_option_id: modifier.modifier_option_id,
         quantity: modifier.quantity,
+        portion_id: modifier.portion_id ?? null,
       })),
     })),
     p_combos: input.combos.map((combo) => ({
