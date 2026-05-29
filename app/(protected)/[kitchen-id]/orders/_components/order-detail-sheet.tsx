@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { updateOrderStatus } from '@/lib/actions/orders'
 import type { OrderActionType, OrderDetail, OrderRow } from '@/lib/types/orders'
+import { OrderPackagingSection } from '@/components/shared/order-packaging-section'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
@@ -24,6 +25,7 @@ import {
 } from '@/components/ui/sheet'
 import { FieldError } from '@/components/ui/field'
 import { fetchOrderDetail } from '@/lib/supabase/queries/order-details'
+import { fetchActivePackagingItems } from '@/lib/supabase/queries/packaging'
 import { ORDERS_QUERY_KEY } from '../_lib/queries'
 import {
   formatAmount,
@@ -101,6 +103,11 @@ export function OrderDetailSheet({
     queryKey: ['order-detail', orderId],
     queryFn: () => fetchOrderDetail(orderId),
     enabled: open && !!orderId,
+  })
+  const { data: packagingItems = [] } = useQuery({
+    queryKey: ['active-packaging-items', kitchenId],
+    queryFn: () => fetchActivePackagingItems(kitchenId),
+    enabled: open,
   })
 
   const detail = data ?? order
@@ -289,6 +296,22 @@ export function OrderDetailSheet({
                           ))
                         )}
                       </div>
+                    </section>
+
+                    <section className="px-4 py-4">
+                      <OrderPackagingSection
+                        kitchenId={kitchenId}
+                        order={data}
+                        packagingItems={packagingItems}
+                        canUpdate={canUpdate}
+                        canAction={canAction}
+                        onChanged={async () => {
+                          await queryClient.invalidateQueries({ queryKey: ORDERS_QUERY_KEY })
+                          await queryClient.invalidateQueries({
+                            queryKey: ['order-detail', data.id],
+                          })
+                        }}
+                      />
                     </section>
 
                     <section className="px-4 py-4">

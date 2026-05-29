@@ -32,6 +32,11 @@ interface CreatePosOrderDiscount {
   reason?: string | null
 }
 
+interface CreatePosOrderPackagingInput {
+  packaging_item_id: string
+  quantity: number
+}
+
 interface CreatePosOrderInput {
   brandId: string
   sourceId: string
@@ -40,6 +45,7 @@ interface CreatePosOrderInput {
   items: CreatePosOrderItemInput[]
   combos: CreatePosOrderComboInput[]
   discount?: CreatePosOrderDiscount | null
+  packaging?: CreatePosOrderPackagingInput[] | null
 }
 
 interface OrderActionItemInput {
@@ -53,6 +59,13 @@ interface OrderDiscountInput {
   amount?: number | null
   percentage?: number | null
   orderItemId?: string | null
+  reason?: string | null
+}
+
+interface SetOrderPackagingQuantityInput {
+  orderId: string
+  packagingItemId: string
+  quantity: number
   reason?: string | null
 }
 
@@ -97,6 +110,13 @@ export async function createPosOrder(
     p_discount_amount: input.discount?.type === 'fixed' ? (input.discount.amount ?? null) : null,
     p_discount_percentage: input.discount?.type === 'percentage' ? (input.discount.percentage ?? null) : null,
     p_discount_reason: input.discount?.reason ?? null,
+    p_packaging:
+      input.packaging === undefined
+        ? null
+        : input.packaging?.map((packaging) => ({
+            packaging_item_id: packaging.packaging_item_id,
+            quantity: packaging.quantity,
+          })) ?? null,
   })
 
   if (error) return new Error(error.message)
@@ -156,6 +176,24 @@ export async function applyOrderDiscount(
     p_amount: input.amount ?? null,
     p_percentage: input.percentage ?? null,
     p_order_item_id: input.orderItemId ?? null,
+    p_reason: input.reason ?? null,
+  })
+
+  if (error) return new Error(error.message)
+  revalidateOrderRoutes(kitchenId)
+  return typeof data === 'string' ? data : String(data)
+}
+
+export async function setOrderPackagingQuantity(
+  kitchenId: string,
+  input: SetOrderPackagingQuantityInput
+): Promise<string | Error> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('set_order_packaging_quantity', {
+    p_kitchen_id: kitchenId,
+    p_order_id: input.orderId,
+    p_packaging_item_id: input.packagingItemId,
+    p_quantity: input.quantity,
     p_reason: input.reason ?? null,
   })
 

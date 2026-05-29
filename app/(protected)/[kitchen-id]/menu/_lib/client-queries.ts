@@ -152,7 +152,7 @@ export async function fetchModifierOptions(
   const supabase = createClient()
   const { data, error } = await supabase
     .from('modifier_options')
-    .select('*')
+    .select('*, modifier_option_components(*)')
     .eq('modifier_group_id', groupId)
     .eq('kitchen_id', kitchenId)
     .order('created_at', { ascending: true })

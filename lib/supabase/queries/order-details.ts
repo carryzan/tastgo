@@ -23,6 +23,10 @@ export async function fetchOrderDetail(orderId: string): Promise<OrderDetail> {
         combo:combos!combo_id(id, name)
       ),
       order_discounts(*),
+      order_packaging_entries(
+        *,
+        applied_member:kitchen_members!applied_by(id, profiles(full_name))
+      ),
       order_actions(
         *,
         applied_member:kitchen_members!applied_by(id, profiles(full_name)),

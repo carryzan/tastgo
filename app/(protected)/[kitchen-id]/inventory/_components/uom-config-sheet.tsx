@@ -5,6 +5,7 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   LockIcon,
+  RulerIcon,
   Trash2Icon,
 } from 'lucide-react'
 import { useKitchen } from '@/hooks/use-kitchen'
@@ -34,6 +35,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
 
@@ -158,6 +160,9 @@ export function UOMConfigSheet({
       if (cancelled) return
       setLoading(true)
       setError(null)
+      setStorageUomId('')
+      setRows([])
+      setExpandedRows(new Set())
 
       const [itemResult, conversionResult] = await Promise.all([
         supabase
@@ -187,25 +192,12 @@ export function UOMConfigSheet({
       }
 
       const item = itemResult.data as InventoryItemUomState
-      const nextStorage = item.storage_uom_id ?? uoms[0]?.id ?? ''
+      const nextStorage = item.storage_uom_id ?? ''
       const stored = (conversionResult.data ?? []) as StoredConversion[]
       const nextRows: ConversionRow[] = stored.map((row) => ({
         ...row,
         key: row.id,
       }))
-
-      if (nextStorage && !nextRows.some((row) => row.uom_id === nextStorage)) {
-        const identity = createRow(nextStorage)
-        identity.factor_to_storage = 1
-        identity.is_default_purchase = true
-        identity.is_default_recipe = true
-        identity.is_default_modifier = true
-        identity.is_default_count = true
-        identity.is_default_waste = true
-        identity.is_default_return = true
-        identity.is_default_opening = true
-        nextRows.unshift(identity)
-      }
 
       setStorageUomId(nextStorage)
       setRows(nextRows)
@@ -355,7 +347,7 @@ export function UOMConfigSheet({
               <Field>
                 <FieldLabel>Storage UOM</FieldLabel>
                 <Select
-                  value={storageUomId}
+                  value={storageUomId || undefined}
                   onValueChange={handleStorageChange}
                   disabled={disabled}
                 >
@@ -388,39 +380,49 @@ export function UOMConfigSheet({
               </Button>
             </div>
 
-            <div className="overflow-x-auto rounded-md border">
-              <table className="w-full min-w-[720px] table-fixed text-sm">
-                <colgroup>
-                  <col className="w-10" />
-                  <col className="w-56" />
-                  <col className="w-40" />
-                  <col className="w-28" />
-                  <col className="w-12" />
-                </colgroup>
-                <thead className="bg-background">
-                  <tr className="border-b">
-                    <th className="py-2 pl-4 pr-1 text-left font-medium text-muted-foreground" />
-                    <th className="px-2 py-2 text-left font-medium text-muted-foreground">
-                      UOM
-                    </th>
-                    <th className="px-2 py-2 text-left font-medium text-muted-foreground">
-                      Factor to storage
-                    </th>
-                    <th className="px-2 py-2 text-left font-medium text-muted-foreground">
-                      Status
-                    </th>
-                    <th className="w-12" />
-                  </tr>
-                </thead>
-                <tbody>
-                {loading ? (
-                  <tr>
-                    <td colSpan={5} className="h-32 px-4 text-center text-muted-foreground">
-                      Loading UOMs...
-                    </td>
-                  </tr>
-                ) : (
-                  rows.map((row) => {
+            {loading ? (
+              <Skeleton className="h-12 w-full rounded-lg" />
+            ) : rows.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+                <div className="rounded-full bg-muted p-3">
+                  <RulerIcon className="size-5 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">No UOM conversions yet</p>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
+                    {storageUomId
+                      ? 'Click Add UOM to create the first conversion.'
+                      : 'Select a storage UOM and click Add UOM to create the first conversion.'}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-md border">
+                <table className="w-full min-w-[720px] table-fixed text-sm">
+                  <colgroup>
+                    <col className="w-10" />
+                    <col className="w-56" />
+                    <col className="w-40" />
+                    <col className="w-28" />
+                    <col className="w-12" />
+                  </colgroup>
+                  <thead className="bg-background">
+                    <tr className="border-b">
+                      <th className="py-2 pl-4 pr-1 text-left font-medium text-muted-foreground" />
+                      <th className="px-2 py-2 text-left font-medium text-muted-foreground">
+                        UOM
+                      </th>
+                      <th className="px-2 py-2 text-left font-medium text-muted-foreground">
+                        Factor to storage
+                      </th>
+                      <th className="px-2 py-2 text-left font-medium text-muted-foreground">
+                        Status
+                      </th>
+                      <th className="w-12" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                  {rows.map((row) => {
                     const isStorage = row.uom_id === storageUomId
                     const isExpanded = expandedRows.has(row.key)
                     const uom = uomById.get(row.uom_id)
@@ -553,11 +555,11 @@ export function UOMConfigSheet({
                         )}
                       </Fragment>
                     )
-                  })
-                )}
-                </tbody>
-              </table>
-            </div>
+                  })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
           {error && (

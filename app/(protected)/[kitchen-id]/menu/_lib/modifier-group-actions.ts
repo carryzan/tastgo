@@ -10,23 +10,27 @@ export type ModifierOptionType =
   | 'neutral'
 
 type ModifierComponentType = 'inventory_item' | 'production_recipe'
+type ModifierComponentDirection = 'add' | 'remove'
 type ModifierPricePortionBehavior = 'scale_with_portion' | 'fixed'
+
+interface CreateModifierGroupComponentData {
+  direction: ModifierComponentDirection
+  component_type: ModifierComponentType
+  inventory_item_id: string | null
+  production_recipe_id: string | null
+  quantity: number | null
+  uom_id: string | null
+  sort_order: number
+}
 
 interface CreateModifierGroupOptionData {
   name: string
   type: ModifierOptionType
-  component_type: ModifierComponentType | null
-  inventory_item_id: string | null
-  production_recipe_id: string | null
-  removed_component_type: ModifierComponentType | null
-  removed_inventory_item_id: string | null
-  removed_production_recipe_id: string | null
-  quantity: number | null
-  uom_id: string | null
   price_charge: number
   is_active: boolean
   is_default: boolean
   price_portion_behavior: ModifierPricePortionBehavior
+  components: CreateModifierGroupComponentData[]
 }
 
 export async function createModifierGroup(data: {
@@ -49,18 +53,19 @@ export async function createModifierGroup(data: {
       p_options: data.options.map((option) => ({
         name: option.name,
         type: option.type,
-        component_type: option.component_type,
-        inventory_item_id: option.inventory_item_id,
-        production_recipe_id: option.production_recipe_id,
-        removed_component_type: option.removed_component_type,
-        removed_inventory_item_id: option.removed_inventory_item_id,
-        removed_production_recipe_id: option.removed_production_recipe_id,
-        quantity: option.quantity,
-        uom_id: option.uom_id,
         price_charge: option.price_charge,
         is_active: option.is_active,
         is_default: option.is_default,
         price_portion_behavior: option.price_portion_behavior,
+        components: option.components.map((component) => ({
+          direction: component.direction,
+          component_type: component.component_type,
+          inventory_item_id: component.inventory_item_id,
+          production_recipe_id: component.production_recipe_id,
+          quantity: component.quantity,
+          uom_id: component.uom_id,
+          sort_order: component.sort_order,
+        })),
       })),
     }
   )

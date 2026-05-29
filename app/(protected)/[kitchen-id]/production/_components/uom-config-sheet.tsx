@@ -5,6 +5,7 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   LockIcon,
+  RulerIcon,
   TrashIcon,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -34,6 +35,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
 
@@ -120,7 +122,7 @@ export function UomConfigSheet({
   const uoms = unitsOfMeasure as UOM[]
 
   const [loading, setLoading] = useState(true)
-  const [storageUomId, setStorageUomId] = useState(recipe.storage_uom_id ?? '')
+  const [storageUomId, setStorageUomId] = useState('')
   const [rows, setRows] = useState<ConversionRow[]>([])
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
@@ -143,6 +145,9 @@ export function UomConfigSheet({
       if (cancelled) return
       setLoading(true)
       setError(null)
+      setStorageUomId('')
+      setRows([])
+      setExpandedRows(new Set())
 
       const [recipeResult, conversionsResult] = await Promise.all([
         supabase
@@ -172,24 +177,11 @@ export function UomConfigSheet({
         return
       }
 
-      const nextStorage =
-        recipeResult.data?.storage_uom_id ?? recipe.storage_uom_id ?? uoms[0]?.id ?? ''
+      const nextStorage = recipeResult.data?.storage_uom_id ?? ''
       const nextRows = ((conversionsResult.data ?? []) as ConversionRow[]).map((row) => ({
         ...row,
         key: row.id ?? crypto.randomUUID(),
       }))
-
-      if (nextStorage && !nextRows.some((row) => row.uom_id === nextStorage)) {
-        const identity = createRow(nextStorage)
-        identity.factor_to_storage = 1
-        identity.is_default_production = true
-        identity.is_default_recipe = true
-        identity.is_default_modifier = true
-        identity.is_default_count = true
-        identity.is_default_waste = true
-        identity.is_default_opening = true
-        nextRows.unshift(identity)
-      }
 
       setStorageUomId(nextStorage)
       setRows(nextRows)
@@ -205,7 +197,7 @@ export function UomConfigSheet({
     return () => {
       cancelled = true
     }
-  }, [open, kitchen.id, recipe.id, recipe.storage_uom_id, uoms])
+  }, [open, kitchen.id, recipe.id, uoms])
 
   function handleOpenChange(next: boolean) {
     if (pending) return
@@ -366,39 +358,49 @@ export function UomConfigSheet({
               </Button>
             </div>
 
-            <div className="overflow-x-auto rounded-md border">
-              <table className="w-full min-w-[720px] table-fixed text-sm">
-                <colgroup>
-                  <col className="w-10" />
-                  <col className="w-56" />
-                  <col className="w-40" />
-                  <col className="w-28" />
-                  <col className="w-12" />
-                </colgroup>
-                <thead className="bg-background">
-                  <tr className="border-b">
-                    <th className="py-2 pl-4 pr-1 text-left font-medium text-muted-foreground" />
-                    <th className="px-2 py-2 text-left font-medium text-muted-foreground">
-                      UOM
-                    </th>
-                    <th className="px-2 py-2 text-left font-medium text-muted-foreground">
-                      Factor to output
-                    </th>
-                    <th className="px-2 py-2 text-left font-medium text-muted-foreground">
-                      Status
-                    </th>
-                    <th className="w-12" />
-                  </tr>
-                </thead>
-                <tbody>
-                {loading ? (
-                  <tr>
-                    <td colSpan={5} className="h-32 px-4 text-center text-muted-foreground">
-                      Loading UOMs...
-                    </td>
-                  </tr>
-                ) : (
-                  rows.map((row) => {
+            {loading ? (
+              <Skeleton className="h-12 w-full rounded-lg" />
+            ) : rows.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+                <div className="rounded-full bg-muted p-3">
+                  <RulerIcon className="size-5 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">No UOM conversions yet</p>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
+                    {storageUomId
+                      ? 'Click Add UOM to create the first conversion.'
+                      : 'Select an output UOM and click Add UOM to create the first conversion.'}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-md border">
+                <table className="w-full min-w-[720px] table-fixed text-sm">
+                  <colgroup>
+                    <col className="w-10" />
+                    <col className="w-56" />
+                    <col className="w-40" />
+                    <col className="w-28" />
+                    <col className="w-12" />
+                  </colgroup>
+                  <thead className="bg-background">
+                    <tr className="border-b">
+                      <th className="py-2 pl-4 pr-1 text-left font-medium text-muted-foreground" />
+                      <th className="px-2 py-2 text-left font-medium text-muted-foreground">
+                        UOM
+                      </th>
+                      <th className="px-2 py-2 text-left font-medium text-muted-foreground">
+                        Factor to output
+                      </th>
+                      <th className="px-2 py-2 text-left font-medium text-muted-foreground">
+                        Status
+                      </th>
+                      <th className="w-12" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                  {rows.map((row) => {
                     const isStorage = row.uom_id === storageUomId
                     const isExpanded = expandedRows.has(row.key)
                     const uom = uomById.get(row.uom_id)
@@ -529,11 +531,11 @@ export function UomConfigSheet({
                         )}
                       </Fragment>
                     )
-                  })
-                )}
-                </tbody>
-              </table>
-            </div>
+                  })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
           {error ? (

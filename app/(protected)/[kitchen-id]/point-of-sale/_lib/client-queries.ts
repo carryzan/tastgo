@@ -7,6 +7,7 @@ import type {
   PosCatalogBrand,
   PosCatalogCombo,
   PosCatalogItem,
+  PosCatalogPackagingItem,
   PosCatalogMenu,
   PosCatalogSource,
   PosModifierGroup,
@@ -71,11 +72,19 @@ export interface PosCatalog {
   menus: PosCatalogMenu[]
   items: PosCatalogItem[]
   combos: PosCatalogCombo[]
+  packaging: PosCatalogPackagingItem[]
 }
 
 export async function fetchPosCatalog(kitchenId: string): Promise<PosCatalog> {
   const supabase = createClient()
-  const [brandsResult, sourcesResult, menusResult, itemsResult, combosResult] =
+  const [
+    brandsResult,
+    sourcesResult,
+    menusResult,
+    itemsResult,
+    combosResult,
+    packagingResult,
+  ] =
     await Promise.all([
       supabase
         .from('brands')
@@ -136,6 +145,24 @@ export async function fetchPosCatalog(kitchenId: string): Promise<PosCatalog> {
         .eq('kitchen_id', kitchenId)
         .eq('is_active', true)
         .order('name'),
+      supabase
+        .from('packaging_items')
+        .select(
+          `id,
+          kitchen_id,
+          inventory_item_id,
+          name,
+          default_quantity,
+          auto_add,
+          source_type_scope,
+          sort_order,
+          is_active,
+          inventory_item:inventory_items!inventory_item_id(id, name)`
+        )
+        .eq('kitchen_id', kitchenId)
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true })
+        .order('name'),
     ])
 
   for (const result of [
@@ -144,6 +171,7 @@ export async function fetchPosCatalog(kitchenId: string): Promise<PosCatalog> {
     menusResult,
     itemsResult,
     combosResult,
+    packagingResult,
   ]) {
     if (result.error) throw new Error(result.error.message)
   }
@@ -204,6 +232,7 @@ export async function fetchPosCatalog(kitchenId: string): Promise<PosCatalog> {
     menus: (menusResult.data ?? []) as PosCatalogMenu[],
     items,
     combos: (combosResult.data ?? []) as unknown as RawCombo[],
+    packaging: (packagingResult.data ?? []) as unknown as PosCatalogPackagingItem[],
   }
 }
 

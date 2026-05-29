@@ -3,6 +3,7 @@ export type OrderPaymentStatus = 'unpaid' | 'paid'
 export type OrderActionType = 'void' | 'full_comp' | 'partial_comp' | 'refund'
 export type DiscountType = 'fixed' | 'percentage'
 export type SourceSettlementMode = 'cash_now' | 'marketplace_receivable'
+export type PackagingSourceScope = 'all' | 'online' | 'offline'
 
 export interface NamedReference {
   id: string
@@ -146,11 +147,28 @@ export interface OrderActionRow {
   order_action_items: OrderActionItemLine[]
 }
 
+export interface OrderPackagingEntry {
+  id: string
+  kitchen_id: string
+  order_id: string
+  packaging_item_id: string
+  inventory_item_id_snapshot: string
+  packaging_item_name_snapshot: string
+  inventory_item_name_snapshot: string
+  quantity_delta: string | number
+  reason: string | null
+  cogs_impact: string | number
+  applied_by: string | null
+  created_at: string
+  applied_member?: MemberReference | null
+}
+
 export interface OrderDetail extends OrderRow {
   order_items: OrderLine[]
   order_combos: OrderComboLine[]
   order_discounts: OrderDiscountLine[]
   order_actions: OrderActionRow[]
+  order_packaging_entries: OrderPackagingEntry[]
 }
 
 export interface PosCartModifier {
@@ -178,6 +196,12 @@ export interface PosCartCombo {
   name: string
   quantity: number
   unit_price: number
+}
+
+export interface PosCartPackaging {
+  packaging_item_id: string
+  name: string
+  quantity: number
 }
 
 export interface PosCatalogBrand {
@@ -256,6 +280,19 @@ export interface PosCatalogCombo {
   pricing_type: 'fixed' | 'discounted'
   price: string | number
   combo_items: PosCatalogComboItem[]
+}
+
+export interface PosCatalogPackagingItem {
+  id: string
+  kitchen_id: string
+  inventory_item_id: string
+  name: string
+  default_quantity: string | number
+  auto_add: boolean
+  source_type_scope: PackagingSourceScope
+  sort_order: number
+  is_active: boolean
+  inventory_item: NamedReference | null
 }
 
 export interface DrawerSessionSummary {

@@ -1,13 +1,10 @@
 'use client'
 
-import { useEffect, useMemo, useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { PlusIcon, TrashIcon } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useKitchen } from '@/hooks/use-kitchen'
 import {
-  buildInventoryUomOptions,
-  buildProductionRecipeUomOptions,
-  defaultUomId,
   fetchInventoryUomConversions,
   fetchProductionRecipeUomConversions,
   type InventoryUomConversion,
@@ -29,21 +26,17 @@ import {
   type ProductionRecipePick,
 } from '../_lib/client-queries'
 import type {
-  ModifierComponentType,
   ModifierOptionType,
   ModifierPricePortionBehavior,
 } from '../_lib/modifier-option-actions'
+import {
+  createLocalModifierComponent,
+  ModifierComponentsEditor,
+  type LocalModifierComponent,
+} from './modifier-components-editor'
 import { MenuBrandField, useMenuBrandOptions } from './menu-brand-field'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import {
-  Combobox,
-  ComboboxContent,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-} from '@/components/ui/combobox'
 import {
   Field,
   FieldError,
@@ -73,18 +66,11 @@ interface LocalOption {
   key: string
   name: string
   type: ModifierOptionType
-  component_type: ModifierComponentType | 'none'
-  inventory_item_id: string
-  production_recipe_id: string
-  removed_component_type: ModifierComponentType | 'none'
-  removed_inventory_item_id: string
-  removed_production_recipe_id: string
-  quantity: string
-  uom_id: string
   price_charge: string
   is_active: boolean
   is_default: boolean
   price_portion_behavior: ModifierPricePortionBehavior
+  components: LocalModifierComponent[]
 }
 
 interface AddModifierGroupSheetProps {
@@ -105,18 +91,11 @@ function createOption(): LocalOption {
     key: crypto.randomUUID(),
     name: '',
     type: 'neutral',
-    component_type: 'none',
-    inventory_item_id: '',
-    production_recipe_id: '',
-    removed_component_type: 'none',
-    removed_inventory_item_id: '',
-    removed_production_recipe_id: '',
-    quantity: '',
-    uom_id: '',
     price_charge: '0',
     is_active: true,
     is_default: false,
     price_portion_behavior: 'scale_with_portion',
+    components: [],
   }
 }
 
@@ -155,25 +134,6 @@ export function AddModifierGroupSheet({
     brandOverride != null && brands.some((brand) => brand.id === brandOverride)
       ? brandOverride
       : brands[0]?.id ?? ''
-
-  const inventoryIds = useMemo(
-    () => inventoryItems.map((item) => item.id),
-    [inventoryItems]
-  )
-  const inventoryLabelById = useMemo(() => {
-    const map = new Map<string, string>()
-    for (const item of inventoryItems) map.set(item.id, item.name)
-    return map
-  }, [inventoryItems])
-  const productionRecipeIds = useMemo(
-    () => productionRecipes.map((recipe) => recipe.id),
-    [productionRecipes]
-  )
-  const productionRecipeLabelById = useMemo(() => {
-    const map = new Map<string, string>()
-    for (const recipe of productionRecipes) map.set(recipe.id, recipe.name)
-    return map
-  }, [productionRecipes])
 
   useEffect(() => {
     if (!open) return
@@ -220,30 +180,26 @@ export function AddModifierGroupSheet({
     )
   }
 
-  function optionUomOptions(option: LocalOption) {
-    if (option.component_type === 'inventory_item') {
-      return buildInventoryUomOptions(
-        inventoryItems.find((item) => item.id === option.inventory_item_id),
-        uomConversions,
-        uoms,
-        'modifier'
-      )
+  function componentsForOptionType(
+    option: LocalOption,
+    type: ModifierOptionType
+  ) {
+    if (type === 'neutral') return []
+
+    let next = option.components.filter((component) => {
+      if (type === 'addition') return component.direction === 'add'
+      if (type === 'removal') return component.direction === 'remove'
+      return true
+    })
+
+    if ((type === 'addition' || type === 'substitution') && !next.some((c) => c.direction === 'add')) {
+      next = [...next, createLocalModifierComponent('add')]
+    }
+    if ((type === 'removal' || type === 'substitution') && !next.some((c) => c.direction === 'remove')) {
+      next = [...next, createLocalModifierComponent('remove')]
     }
 
-    if (option.component_type === 'production_recipe') {
-      return buildProductionRecipeUomOptions(
-        productionRecipes.find((recipe) => recipe.id === option.production_recipe_id),
-        productionUomConversions,
-        uoms,
-        'modifier'
-      )
-    }
-
-    return []
-  }
-
-  function defaultModifierUomId(option: LocalOption) {
-    return defaultUomId(optionUomOptions(option))
+    return next.map((component, index) => ({ ...component, sort_order: index }))
   }
 
   function removeOption(index: number) {
@@ -278,45 +234,39 @@ export function AddModifierGroupSheet({
       }
 
       if (option.type === 'addition' || option.type === 'substitution') {
-        const quantity = Number.parseFloat(option.quantity)
-        if (option.quantity.trim() === '' || Number.isNaN(quantity) || quantity <= 0) {
-          return `Option "${option.name || 'Untitled'}": quantity is required for ${option.type} type.`
-        }
-        if (option.component_type === 'none') {
-          return `Option "${option.name || 'Untitled'}": select an added component for ${option.type} type.`
-        }
-        if (
-          option.component_type === 'inventory_item' &&
-          !option.inventory_item_id
-        ) {
-          return `Option "${option.name || 'Untitled'}": select an inventory item for ${option.type} type.`
-        }
-        if (
-          option.component_type === 'production_recipe' &&
-          !option.production_recipe_id
-        ) {
-          return `Option "${option.name || 'Untitled'}": select a production recipe for ${option.type} type.`
-        }
-        if (!option.uom_id) {
-          return `Option "${option.name || 'Untitled'}": configure and select a modifier UOM.`
+        if (!option.components.some((component) => component.direction === 'add')) {
+          return `Option "${option.name || 'Untitled'}": add at least one stock component.`
         }
       }
 
       if (option.type === 'removal' || option.type === 'substitution') {
-        if (option.removed_component_type === 'none') {
-          return `Option "${option.name || 'Untitled'}": select the component being removed for ${option.type} type.`
+        if (!option.components.some((component) => component.direction === 'remove')) {
+          return `Option "${option.name || 'Untitled'}": add at least one removed stock component.`
+        }
+      }
+
+      if (option.type === 'neutral' && option.components.length > 0) {
+        return `Option "${option.name || 'Untitled'}": neutral options cannot have stock components.`
+      }
+
+      for (const component of option.components) {
+        if (component.component_type === 'inventory_item' && !component.inventory_item_id) {
+          return `Option "${option.name || 'Untitled'}": select an inventory item for every component.`
         }
         if (
-          option.removed_component_type === 'inventory_item' &&
-          !option.removed_inventory_item_id
+          component.component_type === 'production_recipe' &&
+          !component.production_recipe_id
         ) {
-          return `Option "${option.name || 'Untitled'}": select the inventory item being removed for ${option.type} type.`
+          return `Option "${option.name || 'Untitled'}": select a production recipe for every component.`
         }
-        if (
-          option.removed_component_type === 'production_recipe' &&
-          !option.removed_production_recipe_id
-        ) {
-          return `Option "${option.name || 'Untitled'}": select the production recipe being removed for ${option.type} type.`
+        if (component.direction === 'add') {
+          const quantity = Number.parseFloat(component.quantity)
+          if (component.quantity.trim() === '' || Number.isNaN(quantity) || quantity <= 0) {
+            return `Option "${option.name || 'Untitled'}": added components require a quantity greater than zero.`
+          }
+          if (!component.uom_id) {
+            return `Option "${option.name || 'Untitled'}": select a UOM for every added component.`
+          }
         }
       }
     }
@@ -367,37 +317,28 @@ export function AddModifierGroupSheet({
           options: options.map((option) => ({
             name: option.name.trim(),
             type: option.type,
-            component_type:
-              option.component_type === 'none' ? null : option.component_type,
-            inventory_item_id:
-              option.component_type === 'inventory_item'
-                ? option.inventory_item_id || null
-                : null,
-            production_recipe_id:
-              option.component_type === 'production_recipe'
-                ? option.production_recipe_id || null
-                : null,
-            removed_component_type:
-              option.removed_component_type === 'none'
-                ? null
-                : option.removed_component_type,
-            removed_inventory_item_id:
-              option.removed_component_type === 'inventory_item'
-                ? option.removed_inventory_item_id || null
-                : null,
-            removed_production_recipe_id:
-              option.removed_component_type === 'production_recipe'
-                ? option.removed_production_recipe_id || null
-                : null,
-            quantity:
-              option.quantity.trim() === ''
-                ? null
-                : Number.parseFloat(option.quantity),
-            uom_id: option.uom_id || null,
             price_charge: Number.parseFloat(option.price_charge),
             is_active: option.is_active,
             is_default: option.is_default,
             price_portion_behavior: option.price_portion_behavior,
+            components: option.components.map((component, componentIndex) => ({
+              direction: component.direction,
+              component_type: component.component_type,
+              inventory_item_id:
+                component.component_type === 'inventory_item'
+                  ? component.inventory_item_id || null
+                  : null,
+              production_recipe_id:
+                component.component_type === 'production_recipe'
+                  ? component.production_recipe_id || null
+                  : null,
+              quantity:
+                component.direction === 'add'
+                  ? Number.parseFloat(component.quantity)
+                  : null,
+              uom_id: component.direction === 'add' ? component.uom_id || null : null,
+              sort_order: component.sort_order ?? componentIndex,
+            })),
           })),
         })
 
@@ -570,442 +511,114 @@ export function AddModifierGroupSheet({
             </Button>
           </div>
 
-          <div className="overflow-x-auto rounded-md border">
-            <table className="w-full min-w-[1180px] table-fixed text-sm">
-              <colgroup>
-                <col />
-                <col className="w-32" />
-                <col />
-                <col />
-                <col className="w-20" />
-                <col className="w-24" />
-                <col className="w-24" />
-                <col className="w-28" />
-                <col className="w-20" />
-                <col className="w-16" />
-                <col className="w-12" />
-              </colgroup>
-              <thead className="bg-background">
-                <tr className="border-b">
-                  <th className="py-2 pl-4 pr-2 text-left font-medium text-muted-foreground">
-                    Name
-                  </th>
-                  <th className="px-2 py-2 text-left font-medium text-muted-foreground">
-                    Type
-                  </th>
-                  <th className="px-2 py-2 text-left font-medium text-muted-foreground">
-                    Item
-                  </th>
-                  <th className="px-2 py-2 text-left font-medium text-muted-foreground">
-                    Removed
-                  </th>
-                  <th className="px-2 py-2 text-left font-medium text-muted-foreground">
-                    Qty
-                  </th>
-                  <th className="px-2 py-2 text-left font-medium text-muted-foreground">
-                    UOM
-                  </th>
-                  <th className="px-2 py-2 text-left font-medium text-muted-foreground">
-                    Price
-                  </th>
-                  <th className="px-2 py-2 text-left font-medium text-muted-foreground">
-                    Portion
-                  </th>
-                  <th className="px-2 py-2 text-left font-medium text-muted-foreground">
-                    Default
-                  </th>
-                  <th className="px-2 py-2 text-left font-medium text-muted-foreground">
-                    On
-                  </th>
-                  <th className="w-10" />
-                </tr>
-              </thead>
-              <tbody>
-                {options.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={11}
-                      className="h-32 px-4 text-center text-muted-foreground"
+          <div className="grid gap-3">
+            {options.length === 0 ? (
+              <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
+                No options yet. Add at least one active option before saving.
+              </div>
+            ) : (
+              options.map((option, index) => (
+                <div key={option.key} className="grid gap-4 rounded-md border p-4">
+                  <div className="grid gap-3 lg:grid-cols-[minmax(12rem,1fr)_9rem_7rem_8rem_5rem_4rem_2rem]">
+                    <Input
+                      value={option.name}
+                      onChange={(e) => updateOption(index, { name: e.target.value })}
+                      placeholder="Option name"
+                      disabled={pending}
+                    />
+                    <Select
+                      value={option.type}
+                      onValueChange={(nextValue) => {
+                        const nextType = nextValue as ModifierOptionType
+                        updateOption(index, {
+                          type: nextType,
+                          components: componentsForOptionType(option, nextType),
+                        })
+                      }}
+                      disabled={pending}
                     >
-                      No options yet. Add at least one active option before
-                      saving.
-                    </td>
-                  </tr>
-                ) : (
-                  options.map((option, index) => (
-                    <tr key={option.key} className="border-b">
-                      <td className="py-1.5 pl-4 pr-2">
-                        <Input
-                          value={option.name}
-                          onChange={(e) =>
-                            updateOption(index, { name: e.target.value })
-                          }
-                          placeholder="Name"
-                          disabled={pending}
-                        />
-                      </td>
-                      <td className="px-2 py-1.5">
-                        <Select
-                          value={option.type}
-                          onValueChange={(nextValue) =>
-                            updateOption(index, {
-                              type: nextValue as ModifierOptionType,
-                              component_type:
-                                nextValue === 'addition' ||
-                                nextValue === 'substitution'
-                                  ? option.component_type === 'none'
-                                    ? 'inventory_item'
-                                    : option.component_type
-                                  : 'none',
-                              inventory_item_id:
-                                nextValue === 'addition' ||
-                                nextValue === 'substitution'
-                                  ? option.inventory_item_id
-                                  : '',
-                              production_recipe_id:
-                                nextValue === 'addition' ||
-                                nextValue === 'substitution'
-                                  ? option.production_recipe_id
-                                  : '',
-                              uom_id:
-                                nextValue === 'addition' ||
-                                nextValue === 'substitution'
-                                  ? option.uom_id
-                                  : '',
-                              removed_component_type:
-                                nextValue === 'removal' ||
-                                nextValue === 'substitution'
-                                  ? option.removed_component_type === 'none'
-                                    ? 'inventory_item'
-                                    : option.removed_component_type
-                                  : 'none',
-                              removed_inventory_item_id:
-                                nextValue === 'removal' ||
-                                nextValue === 'substitution'
-                                  ? option.removed_inventory_item_id
-                                  : '',
-                              removed_production_recipe_id:
-                                nextValue === 'removal' ||
-                                nextValue === 'substitution'
-                                  ? option.removed_production_recipe_id
-                                  : '',
-                            })
-                          }
-                          disabled={pending}
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {OPTION_TYPES.map((type) => (
-                              <SelectItem key={type} value={type}>
-                                {type}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </td>
-                      <td className="px-2 py-1.5">
-                        {option.type === 'addition' ||
-                        option.type === 'substitution' ? (
-                          <div className="grid gap-1">
-                            <Select
-                              value={option.component_type}
-                              onValueChange={(nextType) => {
-                                const componentType = nextType as ModifierComponentType
-                                const nextOption = {
-                                  ...option,
-                                  component_type: componentType,
-                                  inventory_item_id: '',
-                                  production_recipe_id: '',
-                                }
-                                updateOption(index, {
-                                  component_type: componentType,
-                                  inventory_item_id: '',
-                                  production_recipe_id: '',
-                                  uom_id: defaultModifierUomId(nextOption),
-                                })
-                              }}
-                              disabled={pending}
-                            >
-                              <SelectTrigger className="w-full">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="inventory_item">Inventory</SelectItem>
-                                <SelectItem value="production_recipe">Recipe</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            {option.component_type === 'production_recipe' ? (
-                              <Combobox
-                                items={productionRecipeIds}
-                                value={option.production_recipe_id || null}
-                                onValueChange={(nextValue) => {
-                                  const nextOption = {
-                                    ...option,
-                                    production_recipe_id: nextValue ?? '',
-                                  }
-                                  updateOption(index, {
-                                    production_recipe_id: nextValue ?? '',
-                                    uom_id: defaultModifierUomId(nextOption),
-                                  })
-                                }}
-                                modal
-                                itemToStringLabel={(id) =>
-                                  productionRecipeLabelById.get(String(id)) ?? ''
-                                }
-                              >
-                                <ComboboxInput placeholder="Recipe" className="w-full" />
-                                <ComboboxContent className="z-100 pointer-events-auto">
-                                  <ComboboxEmpty>No recipes.</ComboboxEmpty>
-                                  <ComboboxList>
-                                    {(id: string) => (
-                                      <ComboboxItem key={id} value={id}>
-                                        {productionRecipeLabelById.get(id) ?? id}
-                                      </ComboboxItem>
-                                    )}
-                                  </ComboboxList>
-                                </ComboboxContent>
-                              </Combobox>
-                            ) : (
-                              <Combobox
-                                items={inventoryIds}
-                                value={option.inventory_item_id || null}
-                                onValueChange={(nextValue) => {
-                                  const nextOption = {
-                                    ...option,
-                                    inventory_item_id: nextValue ?? '',
-                                  }
-                                  updateOption(index, {
-                                    inventory_item_id: nextValue ?? '',
-                                    uom_id: defaultModifierUomId(nextOption),
-                                  })
-                                }}
-                                modal
-                                itemToStringLabel={(id) =>
-                                  inventoryLabelById.get(String(id)) ?? ''
-                                }
-                              >
-                                <ComboboxInput placeholder="Inventory item" className="w-full" />
-                                <ComboboxContent className="z-100 pointer-events-auto">
-                                  <ComboboxEmpty>No inventory items.</ComboboxEmpty>
-                                  <ComboboxList>
-                                    {(id: string) => (
-                                      <ComboboxItem key={id} value={id}>
-                                        {inventoryLabelById.get(id) ?? id}
-                                      </ComboboxItem>
-                                    )}
-                                  </ComboboxList>
-                                </ComboboxContent>
-                              </Combobox>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="px-2 py-1.5">
-                        {option.type === 'removal' ||
-                        option.type === 'substitution' ? (
-                          <div className="grid gap-1">
-                            <Select
-                              value={option.removed_component_type}
-                              onValueChange={(nextType) =>
-                                updateOption(index, {
-                                  removed_component_type:
-                                    nextType as ModifierComponentType,
-                                  removed_inventory_item_id: '',
-                                  removed_production_recipe_id: '',
-                                })
-                              }
-                              disabled={pending}
-                            >
-                              <SelectTrigger className="w-full">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="inventory_item">Inventory</SelectItem>
-                                <SelectItem value="production_recipe">Recipe</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            {option.removed_component_type === 'production_recipe' ? (
-                              <Combobox
-                                items={productionRecipeIds}
-                                value={option.removed_production_recipe_id || null}
-                                onValueChange={(nextValue) =>
-                                  updateOption(index, {
-                                    removed_production_recipe_id: nextValue ?? '',
-                                  })
-                                }
-                                modal
-                                itemToStringLabel={(id) =>
-                                  productionRecipeLabelById.get(String(id)) ?? ''
-                                }
-                              >
-                                <ComboboxInput placeholder="Removed recipe" className="w-full" />
-                                <ComboboxContent className="z-100 pointer-events-auto">
-                                  <ComboboxEmpty>No recipes.</ComboboxEmpty>
-                                  <ComboboxList>
-                                    {(id: string) => (
-                                      <ComboboxItem key={id} value={id}>
-                                        {productionRecipeLabelById.get(id) ?? id}
-                                      </ComboboxItem>
-                                    )}
-                                  </ComboboxList>
-                                </ComboboxContent>
-                              </Combobox>
-                            ) : (
-                              <Combobox
-                                items={inventoryIds}
-                                value={option.removed_inventory_item_id || null}
-                                onValueChange={(nextValue) =>
-                                  updateOption(index, {
-                                    removed_inventory_item_id: nextValue ?? '',
-                                  })
-                                }
-                                modal
-                                itemToStringLabel={(id) =>
-                                  inventoryLabelById.get(String(id)) ?? ''
-                                }
-                              >
-                                <ComboboxInput placeholder="Removed item" className="w-full" />
-                                <ComboboxContent className="z-100 pointer-events-auto">
-                                  <ComboboxEmpty>No inventory items.</ComboboxEmpty>
-                                  <ComboboxList>
-                                    {(id: string) => (
-                                      <ComboboxItem key={id} value={id}>
-                                        {inventoryLabelById.get(id) ?? id}
-                                      </ComboboxItem>
-                                    )}
-                                  </ComboboxList>
-                                </ComboboxContent>
-                              </Combobox>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="px-2 py-1.5">
-                        <Input
-                          type="text"
-                          inputMode="decimal"
-                          value={option.quantity}
-                          onChange={(e) =>
-                            updateOption(index, { quantity: e.target.value })
-                          }
-                          placeholder={
-                            option.type === 'addition' ||
-                            option.type === 'substitution'
-                              ? 'Required'
-                              : 'Optional'
-                          }
-                          disabled={pending}
-                        />
-                      </td>
-                      <td className="px-2 py-1.5">
-                        {option.type === 'addition' ||
-                        option.type === 'substitution' ? (
-                          <Select
-                            value={option.uom_id || undefined}
-                            onValueChange={(value) =>
-                              updateOption(index, { uom_id: value })
-                            }
-                            disabled={
-                              pending ||
-                              optionUomOptions(option).length === 0
-                            }
-                          >
-                            <SelectTrigger className="w-full">
-                              <SelectValue placeholder="UOM" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {optionUomOptions(option).map((uom) => (
-                                <SelectItem key={uom.uom_id} value={uom.uom_id}>
-                                  {uom.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="px-2 py-1.5">
-                        <Input
-                          type="text"
-                          inputMode="decimal"
-                          value={option.price_charge}
-                          onChange={(e) =>
-                            updateOption(index, { price_charge: e.target.value })
-                          }
-                          placeholder="0.00"
-                          disabled={pending}
-                        />
-                      </td>
-                      <td className="px-2 py-1.5">
-                        <Select
-                          value={option.price_portion_behavior}
-                          onValueChange={(value) =>
-                            updateOption(index, {
-                              price_portion_behavior:
-                                value as ModifierPricePortionBehavior,
-                            })
-                          }
-                          disabled={pending}
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="scale_with_portion">Scale</SelectItem>
-                            <SelectItem value="fixed">Fixed</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </td>
-                      <td className="px-2 py-1.5">
-                        <div className="flex h-9 items-center justify-center">
-                          <Checkbox
-                            checked={option.is_default}
-                            onCheckedChange={(checked) =>
-                              updateOption(index, {
-                                is_default: checked === true,
-                              })
-                            }
-                            disabled={pending}
-                          />
-                        </div>
-                      </td>
-                      <td className="px-2 py-1.5">
-                        <div className="flex h-9 items-center justify-center">
-                          <Checkbox
-                            checked={option.is_active}
-                            onCheckedChange={(checked) =>
-                              updateOption(index, {
-                                is_active: checked === true,
-                              })
-                            }
-                            disabled={pending}
-                          />
-                        </div>
-                      </td>
-                      <td className="py-1.5 pl-1 pr-3">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="size-8 text-destructive hover:text-destructive"
-                          onClick={() => removeOption(index)}
-                          disabled={pending}
-                        >
-                          <TrashIcon className="size-4" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {OPTION_TYPES.map((type) => (
+                          <SelectItem key={type} value={type}>
+                            {type}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      type="text"
+                      inputMode="decimal"
+                      value={option.price_charge}
+                      onChange={(e) => updateOption(index, { price_charge: e.target.value })}
+                      placeholder="Price"
+                      disabled={pending}
+                    />
+                    <Select
+                      value={option.price_portion_behavior}
+                      onValueChange={(value) =>
+                        updateOption(index, {
+                          price_portion_behavior:
+                            value as ModifierPricePortionBehavior,
+                        })
+                      }
+                      disabled={pending}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="scale_with_portion">Scale</SelectItem>
+                        <SelectItem value="fixed">Fixed</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <label className="flex h-9 items-center justify-center gap-2 text-xs text-muted-foreground">
+                      <Checkbox
+                        checked={option.is_default}
+                        onCheckedChange={(checked) =>
+                          updateOption(index, { is_default: checked === true })
+                        }
+                        disabled={pending}
+                      />
+                      Default
+                    </label>
+                    <label className="flex h-9 items-center justify-center gap-2 text-xs text-muted-foreground">
+                      <Checkbox
+                        checked={option.is_active}
+                        onCheckedChange={(checked) =>
+                          updateOption(index, { is_active: checked === true })
+                        }
+                        disabled={pending}
+                      />
+                      On
+                    </label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => removeOption(index)}
+                      disabled={pending}
+                      aria-label="Remove option"
+                    >
+                      <TrashIcon />
+                    </Button>
+                  </div>
+                  <ModifierComponentsEditor
+                    components={option.components}
+                    onChange={(components) => updateOption(index, { components })}
+                    inventoryItems={inventoryItems}
+                    productionRecipes={productionRecipes}
+                    inventoryUomConversions={uomConversions}
+                    productionUomConversions={productionUomConversions}
+                    uoms={uoms}
+                    disabled={pending || option.type === 'neutral'}
+                  />
+                </div>
+              ))
+            )}
           </div>
           </div>
 

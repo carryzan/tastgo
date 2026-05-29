@@ -15,6 +15,7 @@ import {
   WalletCardsIcon,
 } from 'lucide-react'
 import { SiteHeader } from '@/components/layout/site-header'
+import { OrderPackagingSection } from '@/components/shared/order-packaging-section'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -66,8 +67,10 @@ import type {
   OrderRow,
   PosCartCombo,
   PosCartLine,
+  PosCartPackaging,
   PosCatalogCombo,
   PosCatalogItem,
+  PosCatalogPackagingItem,
   PosModifierGroup,
   PosModifierOption,
 } from '@/lib/types/orders'
@@ -128,6 +131,40 @@ function cartTotal(lines: PosCartLine[], combos: PosCartCombo[]) {
     0
   )
   return lineTotal + comboTotal
+}
+
+function packagingScopeMatches(
+  scope: PosCatalogPackagingItem['source_type_scope'],
+  sourceType: string | null | undefined
+) {
+  if (scope === 'all') return true
+  return sourceType?.toLowerCase() === scope
+}
+
+function packagingForSource(
+  packagingItems: PosCatalogPackagingItem[],
+  sourceType: string | null | undefined
+) {
+  return packagingItems.filter((item) =>
+    packagingScopeMatches(item.source_type_scope, sourceType)
+  )
+}
+
+function defaultCartPackaging(
+  packagingItems: PosCatalogPackagingItem[],
+  sourceType: string | null | undefined
+): PosCartPackaging[] {
+  return packagingForSource(packagingItems, sourceType).flatMap((item) => {
+    const quantity = numeric(item.default_quantity)
+    if (!item.auto_add || quantity <= 0) return []
+    return [
+      {
+        packaging_item_id: item.id,
+        name: item.name,
+        quantity,
+      },
+    ]
+  })
 }
 
 function matchesOrderFilter(order: OrderRow, filter: PosOrderFilter) {
@@ -520,6 +557,7 @@ export function PosMain() {
   const [menuId, setMenuId] = useState('')
   const [cartLines, setCartLines] = useState<PosCartLine[]>([])
   const [cartCombos, setCartCombos] = useState<PosCartCombo[]>([])
+  const [cartPackaging, setCartPackaging] = useState<PosCartPackaging[]>([])
   const [notes, setNotes] = useState('')
   const [sourceOrderCode, setSourceOrderCode] = useState('')
   const [cartError, setCartError] = useState<string | null>(null)
@@ -613,9 +651,17 @@ export function PosMain() {
     enabled: !!selectedOrder?.id,
   })
 
+  useEffect(() => {
+    if (cartLines.length > 0 || cartCombos.length > 0 || cartPackaging.length === 0) {
+      return
+    }
+    setCartPackaging([])
+  }, [cartLines.length, cartCombos.length, cartPackaging.length])
+
   function resetCart() {
     setCartLines([])
     setCartCombos([])
+    setCartPackaging([])
     setNotes('')
     setSourceOrderCode('')
     setCartDiscount(null)
@@ -630,7 +676,15 @@ export function PosMain() {
     setView('new')
   }
 
+  function applyDefaultPackagingForFirstLine() {
+    if (cartLines.length > 0 || cartCombos.length > 0) return
+    setCartPackaging(
+      defaultCartPackaging(catalog?.packaging ?? [], selectedSource?.type)
+    )
+  }
+
   function addItem(item: PosCatalogItem, modifiers: PosCartLine['modifiers'] = []) {
+    applyDefaultPackagingForFirstLine()
     setCartLines((prev) => [
       ...prev,
       {
@@ -647,6 +701,7 @@ export function PosMain() {
   }
 
   function addCombo(combo: PosCatalogCombo) {
+    applyDefaultPackagingForFirstLine()
     setCartCombos((prev) => [
       ...prev,
       {
@@ -658,6 +713,44 @@ export function PosMain() {
       },
     ])
     setCartError(null)
+  }
+
+  function updateCartPackagingQuantity(
+    item: PosCatalogPackagingItem,
+    quantity: number
+  ) {
+    const nextQuantity = Math.max(0, Number.isFinite(quantity) ? quantity : 0)
+    setCartPackaging((prev) => {
+      const remaining = prev.filter((row) => row.packaging_item_id !== item.id)
+      if (nextQuantity <= 0) return remaining
+      return [
+        ...remaining,
+        {
+          packaging_item_id: item.id,
+          name: item.name,
+          quantity: nextQuantity,
+        },
+      ].sort((a, b) => {
+        const aItem = catalog?.packaging.find((packaging) => packaging.id === a.packaging_item_id)
+        const bItem = catalog?.packaging.find((packaging) => packaging.id === b.packaging_item_id)
+        return (aItem?.sort_order ?? 0) - (bItem?.sort_order ?? 0)
+      })
+    })
+  }
+
+  function changeSource(nextSourceId: string) {
+    setSourceId(nextSourceId)
+    if (cartLines.length === 0 && cartCombos.length === 0) return
+    const nextSource = catalog?.sources.find((source) => source.id === nextSourceId)
+    setCartPackaging(
+      defaultCartPackaging(catalog?.packaging ?? [], nextSource?.type)
+    )
+  }
+
+  async function refreshOrder(orderId: string) {
+    await queryClient.invalidateQueries({ queryKey: POS_ORDERS_KEY })
+    await queryClient.invalidateQueries({ queryKey: ['order-detail', orderId] })
+    await queryClient.invalidateQueries({ queryKey: POS_DRAWERS_KEY })
   }
 
   function updateLineQty(key: string, delta: number) {
@@ -699,6 +792,22 @@ export function PosMain() {
     }
 
     startSubmitTransition(async () => {
+      const packagingPayload = cartPackaging.flatMap((packaging) => {
+        const catalogItem = catalog?.packaging.find(
+          (item) => item.id === packaging.packaging_item_id
+        )
+        if (!catalogItem || !packagingScopeMatches(catalogItem.source_type_scope, selectedSource.type)) {
+          return []
+        }
+        if (packaging.quantity <= 0) return []
+        return [
+          {
+            packaging_item_id: packaging.packaging_item_id,
+            quantity: packaging.quantity,
+          },
+        ]
+      })
+
       const result = await createPosOrder(kitchen.id, {
         brandId: selectedBrand.id,
         sourceId: selectedSource.id,
@@ -719,6 +828,7 @@ export function PosMain() {
           combo_id: combo.combo_id,
           quantity: combo.quantity,
         })),
+        packaging: packagingPayload,
         discount: cartDiscount
           ? {
               type: cartDiscount.type,
@@ -861,7 +971,7 @@ export function PosMain() {
                   itemsForMenu={itemsForMenu}
                   combosForBrand={combosForBrand}
                   onBrand={setBrandId}
-                  onSource={setSourceId}
+                  onSource={changeSource}
                   onMenu={setMenuId}
                   onItem={(item) => {
                     if (item.modifier_groups.length > 0) setModifierItem(item)
@@ -874,6 +984,9 @@ export function PosMain() {
             <CartPanel
               lines={cartLines}
               combos={cartCombos}
+              packaging={cartPackaging}
+              packagingItems={catalog?.packaging ?? []}
+              sourceType={selectedSource?.type ?? null}
               notes={notes}
               sourceOrderCode={sourceOrderCode}
               discount={cartDiscount}
@@ -886,6 +999,7 @@ export function PosMain() {
               onSubmit={submitOrder}
               onLineQty={updateLineQty}
               onComboQty={updateComboQty}
+              onPackagingQty={updateCartPackagingQuantity}
               onRemoveLine={(key) => setCartLines((prev) => prev.filter((line) => line.key !== key))}
               onRemoveCombo={(key) => setCartCombos((prev) => prev.filter((combo) => combo.key !== key))}
               onOpenDiscount={() => setCartDiscountOpen(true)}
@@ -899,8 +1013,10 @@ export function PosMain() {
               onSelect={setSelectedOrderId}
             />
             <PosOrderPanel
+              kitchenId={kitchen.id}
               order={selectedOrderDetail ?? null}
               fallback={selectedOrder}
+              packagingItems={catalog?.packaging ?? []}
               canUpdate={canUpdateOrder}
               canAction={canActionOrder}
               statusError={statusError}
@@ -911,6 +1027,7 @@ export function PosMain() {
               onAction={setOrderAction}
               onDiscount={() => setDiscountOpen(true)}
               onPrint={printReceipt}
+              onPackagingChanged={(order) => refreshOrder(order.id)}
             />
           </>
         ) : (
@@ -1127,6 +1244,9 @@ function cartDiscountAmount(discount: CartDiscount | null, subtotal: number): nu
 function CartPanel({
   lines,
   combos,
+  packaging,
+  packagingItems,
+  sourceType,
   notes,
   sourceOrderCode,
   discount,
@@ -1139,12 +1259,16 @@ function CartPanel({
   onSubmit,
   onLineQty,
   onComboQty,
+  onPackagingQty,
   onRemoveLine,
   onRemoveCombo,
   onOpenDiscount,
 }: {
   lines: PosCartLine[]
   combos: PosCartCombo[]
+  packaging: PosCartPackaging[]
+  packagingItems: PosCatalogPackagingItem[]
+  sourceType: string | null
   notes: string
   sourceOrderCode: string
   discount: CartDiscount | null
@@ -1157,6 +1281,7 @@ function CartPanel({
   onSubmit: () => void
   onLineQty: (key: string, delta: number) => void
   onComboQty: (key: string, delta: number) => void
+  onPackagingQty: (item: PosCatalogPackagingItem, quantity: number) => void
   onRemoveLine: (key: string) => void
   onRemoveCombo: (key: string) => void
   onOpenDiscount: () => void
@@ -1165,6 +1290,11 @@ function CartPanel({
   const discountAmt = cartDiscountAmount(discount, subtotal)
   const total = subtotal - discountAmt
   const empty = lines.length === 0 && combos.length === 0
+  const availablePackaging = packagingForSource(packagingItems, sourceType)
+
+  function packagingQuantity(itemId: string) {
+    return packaging.find((row) => row.packaging_item_id === itemId)?.quantity ?? 0
+  }
 
   return (
     <DetailPanel
@@ -1239,6 +1369,52 @@ function CartPanel({
               onRemove={() => onRemoveCombo(combo.key)}
             />
           ))}
+          {availablePackaging.length > 0 ? (
+            <div className="space-y-2 pt-1">
+              <h3 className="text-sm font-medium text-muted-foreground">Packaging</h3>
+              <div className="divide-y rounded-lg border">
+                {availablePackaging.map((item) => {
+                  const quantity = packagingQuantity(item.id)
+                  return (
+                    <div key={item.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{item.name}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {item.inventory_item?.name ?? item.inventory_item_id}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon-sm"
+                          onClick={() => onPackagingQty(item, quantity - 1)}
+                        >
+                          <MinusIcon />
+                        </Button>
+                        <Input
+                          value={quantity}
+                          onChange={(event) =>
+                            onPackagingQty(item, Number(event.target.value))
+                          }
+                          inputMode="decimal"
+                          className="h-7 w-16 text-center"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon-sm"
+                          onClick={() => onPackagingQty(item, quantity + 1)}
+                        >
+                          <PlusIcon />
+                        </Button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ) : null}
           <div className="grid gap-2 pt-2">
             <Label htmlFor="pos-notes">Notes</Label>
             <Textarea
@@ -1401,8 +1577,10 @@ function formatOrderTabDiscountDisplay(detail: OrderDetail): string {
 }
 
 function PosOrderPanel({
+  kitchenId,
   order,
   fallback,
+  packagingItems,
   canUpdate,
   canAction,
   statusError,
@@ -1413,9 +1591,12 @@ function PosOrderPanel({
   onAction,
   onDiscount,
   onPrint,
+  onPackagingChanged,
 }: {
+  kitchenId: string
   order: OrderDetail | null
   fallback: OrderRow | null
+  packagingItems: PosCatalogPackagingItem[]
   canUpdate: boolean
   canAction: boolean
   statusError: string | null
@@ -1426,6 +1607,7 @@ function PosOrderPanel({
   onAction: (state: { type: OrderActionType; itemMode?: boolean; title?: string }) => void
   onDiscount: () => void
   onPrint: (order: OrderDetail) => void
+  onPackagingChanged: (order: OrderDetail) => Promise<void> | void
 }) {
   const detail = order
   const display = order ?? fallback
@@ -1741,6 +1923,15 @@ function PosOrderPanel({
                 )}
               </div>
             </div>
+
+            <OrderPackagingSection
+              kitchenId={kitchenId}
+              order={detail}
+              packagingItems={packagingItems}
+              canUpdate={canUpdate}
+              canAction={canAction}
+              onChanged={() => onPackagingChanged(detail)}
+            />
 
             <div className="space-y-2">
               <h3 className="text-sm font-medium text-muted-foreground">Actions</h3>
