@@ -194,14 +194,20 @@ export function UOMConfigSheet({
       const item = itemResult.data as InventoryItemUomState
       const nextStorage = item.storage_uom_id ?? ''
       const stored = (conversionResult.data ?? []) as StoredConversion[]
-      const nextRows: ConversionRow[] = stored.map((row) => ({
+      let nextRows: ConversionRow[] = stored.map((row) => ({
         ...row,
         key: row.id,
       }))
+      let expanded = new Set<string>()
+      if (nextStorage && nextRows.length === 0) {
+        const storageRow = createRow(nextStorage)
+        nextRows = [storageRow]
+        expanded = new Set([storageRow.key])
+      }
 
       setStorageUomId(nextStorage)
       setRows(nextRows)
-      setExpandedRows(new Set())
+      setExpandedRows(expanded)
       setLoading(false)
     }).catch(() => {
       if (!cancelled) {
@@ -271,9 +277,12 @@ export function UOMConfigSheet({
 
   function addConversion() {
     const used = new Set(rows.map((row) => row.uom_id))
-    const next = uoms.find((uom) => !used.has(uom.id))
-    if (!next) return
-    const nextRow = createRow(next.id)
+    const nextUomId =
+      storageUomId && !used.has(storageUomId)
+        ? storageUomId
+        : uoms.find((uom) => !used.has(uom.id))?.id
+    if (!nextUomId) return
+    const nextRow = createRow(nextUomId)
     setRows((current) => [...current, nextRow])
     setExpandedRows((current) => new Set([...current, nextRow.key]))
   }

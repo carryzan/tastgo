@@ -178,14 +178,20 @@ export function UomConfigSheet({
       }
 
       const nextStorage = recipeResult.data?.storage_uom_id ?? ''
-      const nextRows = ((conversionsResult.data ?? []) as ConversionRow[]).map((row) => ({
+      let nextRows = ((conversionsResult.data ?? []) as ConversionRow[]).map((row) => ({
         ...row,
         key: row.id ?? crypto.randomUUID(),
       }))
+      let expanded = new Set<string>()
+      if (nextStorage && nextRows.length === 0) {
+        const storageRow = createRow(nextStorage)
+        nextRows = [storageRow]
+        expanded = new Set([storageRow.key])
+      }
 
       setStorageUomId(nextStorage)
       setRows(nextRows)
-      setExpandedRows(new Set())
+      setExpandedRows(expanded)
       setLoading(false)
     }).catch(() => {
       if (!cancelled) {
@@ -255,9 +261,12 @@ export function UomConfigSheet({
 
   function addRow() {
     const used = new Set(rows.map((row) => row.uom_id))
-    const nextUom = uoms.find((uom) => !used.has(uom.id))
-    if (!nextUom) return
-    const nextRow = createRow(nextUom.id)
+    const nextUomId =
+      storageUomId && !used.has(storageUomId)
+        ? storageUomId
+        : uoms.find((uom) => !used.has(uom.id))?.id
+    if (!nextUomId) return
+    const nextRow = createRow(nextUomId)
     setRows((current) => [...current, nextRow])
     setExpandedRows((current) => new Set([...current, nextRow.key]))
   }
