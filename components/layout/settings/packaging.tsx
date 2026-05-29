@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState, useTransition } from 'react'
-import { MoreHorizontal, PlusIcon } from 'lucide-react'
+import { MoreHorizontal } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useKitchen } from '@/hooks/use-kitchen'
 import { createClient } from '@/lib/supabase/client'
@@ -22,11 +22,13 @@ import {
 } from '@/components/ui/combobox'
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from '@/components/ui/dialog'
 import {
   DropdownMenu,
@@ -153,11 +155,10 @@ export function PackagingSettings() {
     return map
   }, [inventoryItems])
 
-  function openAddDialog() {
+  function prepareAdd() {
     setEditingItem(null)
     setForm(emptyForm)
     setError(null)
-    setDialogOpen(true)
   }
 
   function openEditDialog(item: PackagingItem) {
@@ -238,18 +239,34 @@ export function PackagingSettings() {
     })
   }
 
+  const blockClose = (e: { preventDefault(): void }) => {
+    if (pending) e.preventDefault()
+  }
+
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex justify-end">
-        <Button type="button" size="sm" onClick={openAddDialog} disabled={!canManage}>
-          <PlusIcon />
-          Add packaging
-        </Button>
-      </div>
+    <Dialog
+      open={dialogOpen}
+      onOpenChange={(open) => {
+        if (pending) return
+        setDialogOpen(open)
+        if (!open) {
+          setError(null)
+          setEditingItem(null)
+        }
+      }}
+    >
+      <div className="flex flex-col gap-3">
+        <div className="flex justify-end">
+          <DialogTrigger asChild>
+            <Button type="button" disabled={!canManage} onClick={prepareAdd}>
+              Add Package
+            </Button>
+          </DialogTrigger>
+        </div>
 
-      {error ? <FieldError>{error}</FieldError> : null}
+        {error && !dialogOpen ? <FieldError>{error}</FieldError> : null}
 
-      <div className="rounded-xl border overflow-hidden">
+        <div className="rounded-xl border overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
@@ -326,12 +343,16 @@ export function PackagingSettings() {
             )}
           </TableBody>
         </Table>
+        </div>
       </div>
 
-      <Dialog open={dialogOpen} onOpenChange={(open) => !pending && setDialogOpen(open)}>
-        <DialogContent>
+      <DialogContent
+        className="sm:max-w-md"
+        onInteractOutside={blockClose}
+        onEscapeKeyDown={blockClose}
+      >
           <DialogHeader>
-            <DialogTitle>{editingItem ? 'Edit packaging' : 'Add packaging'}</DialogTitle>
+            <DialogTitle>{editingItem ? 'Edit Package' : 'Add Package'}</DialogTitle>
             <DialogDescription>
               Configure inventory items that can be attached to orders.
             </DialogDescription>
@@ -451,23 +472,24 @@ export function PackagingSettings() {
               />
             </label>
           </FieldGroup>
-          {error ? <FieldError>{error}</FieldError> : null}
-          <DialogFooter>
-            <Button type="button" onClick={handleSave} disabled={pending || !canManage}>
-              {pending ? <Spinner data-icon="inline-start" /> : null}
-              Save
-            </Button>
+          {error ? <FieldError className="mt-2">{error}</FieldError> : null}
+          <DialogFooter className="mt-4">
+            <DialogClose asChild>
+              <Button type="button" variant="outline" disabled={pending}>
+                Cancel
+              </Button>
+            </DialogClose>
             <Button
               type="button"
-              variant="outline"
-              onClick={() => setDialogOpen(false)}
-              disabled={pending}
+              onClick={handleSave}
+              disabled={pending || !canManage}
+              className="min-w-28"
             >
-              Cancel
+              {pending ? <Spinner data-icon="inline-start" /> : null}
+              {editingItem ? 'Save' : 'Add Package'}
             </Button>
           </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }

@@ -30,7 +30,7 @@ import {
 import { PackagingSettings } from "./packaging"
 
 export function Inventory() {
-  const [tab, setTab] = useState("settings")
+  const [tab, setTab] = useState("general")
   const { kitchenSettings, updateSettings } = useKitchen()
 
   const completed =
@@ -54,11 +54,11 @@ export function Inventory() {
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
-          <TabsTrigger value="settings">Settings</TabsTrigger>
+          <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="packaging">Packaging</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="settings" className="mt-3 space-y-6">
+        <TabsContent value="general" className="mt-3 space-y-6">
           <Item className="p-0">
             <ItemContent>
               <ItemTitle>Starting inventory locked</ItemTitle>
