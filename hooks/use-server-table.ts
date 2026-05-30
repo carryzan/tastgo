@@ -280,6 +280,8 @@ export function useServerTable<TData extends { id: string }>({
     },
   })
 
+  // TanStack Table returns unstable function references; React Compiler skips memoization.
+  // eslint-disable-next-line react-hooks/incompatible-library -- upstream useReactTable API
   const table = useReactTable({
     data: data?.rows ?? [],
     columns,

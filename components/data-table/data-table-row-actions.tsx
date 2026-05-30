@@ -35,7 +35,7 @@ export function DataTableRowActions<TData>({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-xs">
+        <Button type="button" variant="ghost" size="icon-xs">
           <MoreHorizontalIcon />
           <span className="sr-only">Open menu</span>
         </Button>

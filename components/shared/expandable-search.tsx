@@ -20,12 +20,11 @@ export function ExpandableSearch({ value, onChange, className }: ExpandableSearc
     function handlePointerDown(event: PointerEvent) {
       const root = rootRef.current
       if (!root || !(event.target instanceof Node) || root.contains(event.target)) return
-      onChange('')
-      setOpen(false)
+      if (!value) setOpen(false)
     }
     document.addEventListener('pointerdown', handlePointerDown)
     return () => document.removeEventListener('pointerdown', handlePointerDown)
-  }, [open, onChange])
+  }, [open, value])
 
   function handleToggle() {
     if (open) {
