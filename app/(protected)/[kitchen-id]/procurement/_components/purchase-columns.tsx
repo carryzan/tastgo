@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import type { ColumnDef, Row } from '@tanstack/react-table'
 import {
   CheckCheckIcon,
+  EyeIcon,
   PackageCheckIcon,
   ReceiptTextIcon,
   RotateCcwIcon,
@@ -70,6 +71,7 @@ export function getPurchaseColumns(
   permissions: Permission,
   callbacks: {
     onEdit: (row: Row<Purchase>) => void
+    onViewDetail: (row: Row<Purchase>) => void
     onMarkSent: (row: Row<Purchase>) => void
     onReceive: (row: Row<Purchase>) => void
     onPayments: (row: Row<Purchase>) => void
@@ -83,6 +85,10 @@ export function getPurchaseColumns(
     const { status } = row.original
     return (
       <>
+        <DropdownMenuItem onClick={() => callbacks.onViewDetail(row)}>
+          <EyeIcon />
+          View detail
+        </DropdownMenuItem>
         {status === 'draft' && (
           <DropdownMenuItem onClick={() => callbacks.onMarkSent(row)}>
             <SendIcon />

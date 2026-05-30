@@ -69,6 +69,7 @@ import { AddPurchaseSheet } from './add-purchase-sheet'
 import { AddPaymentSheet } from './add-payment-sheet'
 import { AddCreditSheet } from './add-credit-sheet'
 import { EditPurchaseSheet } from './edit-purchase-sheet'
+import { PurchaseDetailSheet } from './purchase-detail-sheet'
 import { ReceivePurchaseSheet } from './receive-purchase-sheet'
 import { PurchasePaymentsSheet } from './purchase-payments-sheet'
 import { AddReturnSheet } from './add-return-sheet'
@@ -92,6 +93,7 @@ export function ProcurementMain() {
 
   // Purchase state
   const [addPurchaseOpen, setAddPurchaseOpen] = useState(false)
+  const [detailPurchase, setDetailPurchase] = useState<Purchase | null>(null)
   const [editPurchase, setEditPurchase] = useState<Purchase | null>(null)
   const [receivePurchase, setReceivePurchase] = useState<Purchase | null>(null)
   const [paymentsPurchase, setPaymentsPurchase] = useState<Purchase | null>(null)
@@ -161,6 +163,9 @@ export function ProcurementMain() {
   const handleEditPurchase = useCallback((row: Row<Purchase>) => {
     setEditPurchase(row.original)
   }, [])
+  const handleViewPurchaseDetail = useCallback((row: Row<Purchase>) => {
+    setDetailPurchase(row.original)
+  }, [])
   const handleMarkSent = useCallback((row: Row<Purchase>) => {
     startMarkSentTransition(async () => {
       await markPurchaseSent(kitchen.id, row.original.id)
@@ -184,13 +189,14 @@ export function ProcurementMain() {
     () =>
       getPurchaseColumns(supplierPermissions, {
         onEdit: handleEditPurchase,
+        onViewDetail: handleViewPurchaseDetail,
         onMarkSent: handleMarkSent,
         onReceive: handleReceive,
         onPayments: handlePayments,
         onCreateReturn: handleCreateReturn,
         onReassign: handleReassign,
       }),
-    [supplierPermissions, handleEditPurchase, handleMarkSent, handleReceive, handlePayments, handleCreateReturn, handleReassign]
+    [supplierPermissions, handleEditPurchase, handleViewPurchaseDetail, handleMarkSent, handleReceive, handlePayments, handleCreateReturn, handleReassign]
   )
 
   const {
@@ -421,6 +427,15 @@ export function ProcurementMain() {
         open={addPurchaseOpen}
         onOpenChange={setAddPurchaseOpen}
       />
+      {detailPurchase && (
+        <PurchaseDetailSheet
+          purchase={detailPurchase}
+          open
+          onOpenChange={(next) => {
+            if (!next) setDetailPurchase(null)
+          }}
+        />
+      )}
       {editPurchase && editPurchase.status === 'draft' && (
         <EditPurchaseSheet
           purchase={editPurchase}
