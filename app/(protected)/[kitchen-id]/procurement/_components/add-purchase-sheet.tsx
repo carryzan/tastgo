@@ -12,6 +12,11 @@ import {
   type KitchenUom,
 } from '@/lib/uom-conversions'
 import { createPurchase } from '../_lib/purchase-actions'
+import {
+  isValidPurchaseQuantity,
+  lineTotalFromParts,
+  unitCostFromLineTotal,
+} from '../_lib/purchase-line-math'
 import { PURCHASES_QUERY_KEY } from '../_lib/queries'
 import {
   fetchActiveSuppliers,
@@ -171,17 +176,10 @@ export function AddPurchaseSheet({ open, onOpenChange }: AddPurchaseSheetProps) 
     })
   }
 
-  const computeLineTotal = (qty: string, cost: string) => {
-    const q = Number(qty)
-    const c = Number(cost)
-    if (!qty || !cost || Number.isNaN(q) || Number.isNaN(c)) return '—'
-    return (q * c).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-  }
-
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetContent
-        className="flex flex-col gap-0 p-0 sm:max-w-2xl"
+        className="flex flex-col gap-0 p-0 sm:max-w-3xl"
         showCloseButton={!pending}
         onInteractOutside={(e) => {
           if (pending) e.preventDefault()
@@ -244,6 +242,8 @@ export function AddPurchaseSheet({ open, onOpenChange }: AddPurchaseSheetProps) 
             </Button>
           </div>
 
+          <div className="border-t shrink-0" />
+
           {/* Scrollable table */}
           <div className="flex-1 overflow-y-auto">
             <Table>
@@ -251,9 +251,9 @@ export function AddPurchaseSheet({ open, onOpenChange }: AddPurchaseSheetProps) 
                   <TableRow>
                     <TableHead className="pl-4">Item</TableHead>
                     <TableHead className="w-28">UOM</TableHead>
-                    <TableHead className="w-28">Qty</TableHead>
-                  <TableHead className="w-28">Unit cost</TableHead>
-                  <TableHead className="w-24">Total</TableHead>
+                    <TableHead className="w-36 min-w-36">Qty</TableHead>
+                    <TableHead className="w-40 min-w-40">Unit cost</TableHead>
+                    <TableHead className="w-36 min-w-36">Total</TableHead>
                   <TableHead className="w-10" />
                 </TableRow>
               </TableHeader>
@@ -329,12 +329,13 @@ export function AddPurchaseSheet({ open, onOpenChange }: AddPurchaseSheetProps) 
                             </SelectContent>
                           </Select>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="w-36 min-w-36">
                           <Input
                             type="number"
                             inputMode="decimal"
                             min="0.0001"
                             step="0.0001"
+                            className="tabular-nums"
                             value={item.ordered_quantity}
                             onChange={(e) =>
                               updateItem(index, { ordered_quantity: e.target.value })
@@ -343,12 +344,13 @@ export function AddPurchaseSheet({ open, onOpenChange }: AddPurchaseSheetProps) 
                             placeholder="0"
                           />
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="w-40 min-w-40">
                           <Input
                             type="number"
                             inputMode="decimal"
                             min="0"
                             step="0.000001"
+                            className="tabular-nums"
                             value={item.unit_cost}
                             onChange={(e) =>
                               updateItem(index, { unit_cost: e.target.value })
@@ -357,8 +359,31 @@ export function AddPurchaseSheet({ open, onOpenChange }: AddPurchaseSheetProps) 
                             placeholder="0.00"
                           />
                         </TableCell>
-                        <TableCell className="tabular-nums text-muted-foreground">
-                          {computeLineTotal(item.ordered_quantity, item.unit_cost)}
+                        <TableCell className="w-36 min-w-36">
+                          <Input
+                            type="number"
+                            inputMode="decimal"
+                            min="0"
+                            step="0.01"
+                            className="tabular-nums"
+                            value={lineTotalFromParts(
+                              item.ordered_quantity,
+                              item.unit_cost
+                            )}
+                            onChange={(e) => {
+                              const nextUnitCost = unitCostFromLineTotal(
+                                e.target.value,
+                                item.ordered_quantity
+                              )
+                              if (nextUnitCost !== null) {
+                                updateItem(index, { unit_cost: nextUnitCost })
+                              }
+                            }}
+                            disabled={
+                              pending || !isValidPurchaseQuantity(item.ordered_quantity)
+                            }
+                            placeholder="0.00"
+                          />
                         </TableCell>
                         <TableCell>
                           <Button
